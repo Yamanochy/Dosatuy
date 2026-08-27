@@ -5,6 +5,7 @@
 let chatCache = []; // сообщения, по возрастанию времени
 let chatUnsub = null;
 let chatScrollPinned = true; // прилипание к низу при новых сообщениях
+const CHAT_LASTREAD_KEY = "vahta-chat-lastread";
 
 function subscribeChat() {
   if (chatUnsub) return;
@@ -14,7 +15,42 @@ function subscribeChat() {
     .onSnapshot((snap) => {
       chatCache = snap.docs.map((d) => ({ id: d.id, ...d.data() })).reverse();
       if (currentTab === "chat") renderChatMessages();
+      updateChatNavBadge();
     }, (err) => console.error(err));
+}
+
+// ---------- значок непрочитанных на вкладке «Чат» в самом приложении ----------
+function getLastReadTime() {
+  return parseInt(localStorage.getItem(CHAT_LASTREAD_KEY) || "0", 10);
+}
+function unreadChatCount() {
+  const lastRead = getLastReadTime();
+  return chatCache.filter((m) => {
+    if (!m.createdAt || !m.createdAt.toDate) return false; // ещё не подтверждено сервером
+    if (currentUser && m.senderUid === currentUser.uid) return false; // свои не считаем
+    return m.createdAt.toDate().getTime() > lastRead;
+  }).length;
+}
+function markChatAsRead() {
+  const last = chatCache[chatCache.length - 1];
+  const t = last && last.createdAt && last.createdAt.toDate ? last.createdAt.toDate().getTime() : Date.now();
+  localStorage.setItem(CHAT_LASTREAD_KEY, String(t));
+  updateChatNavBadge();
+}
+function updateChatNavBadge() {
+  const btn = document.querySelector('.tabbtn[data-tab="chat"]');
+  if (!btn) return;
+  let dot = btn.querySelector(".chat-unread-dot");
+  const count = unreadChatCount();
+  if (count > 0) {
+    if (!dot) {
+      dot = el("span", "chat-unread-dot absolute top-0.5 right-2.5 bg-rose-500 text-white text-[10px] leading-none rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 font-bold");
+      btn.appendChild(dot);
+    }
+    dot.textContent = count > 9 ? "9+" : String(count);
+  } else if (dot) {
+    dot.remove();
+  }
 }
 
 function fmtChatTime(ts) {
@@ -57,7 +93,9 @@ function renderChat() {
   app.appendChild(wrap);
   renderChatMessages();
   renderChatInputBar();
+  markChatAsRead();
 }
+
 
 function renderChatMessages() {
   const list = document.getElementById("chat-list");

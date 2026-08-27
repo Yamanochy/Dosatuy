@@ -461,6 +461,7 @@ function startApp() {
   currentTab = "dashboard";
   render();
   subscribeCloudSettings();
+  if (typeof subscribeChat === "function") subscribeChat();
   if (typeof clearUnreadBadge === "function") clearUnreadBadge();
 
   if ("serviceWorker" in navigator) {
