@@ -29,6 +29,11 @@ Cloudinary (хранение фото). Карта нигде не нужна.
          allow update, delete: if request.auth != null
            && request.auth.uid == resource.data.uploadedByUid;
        }
+       match /chatMessages/{msgId} {
+         allow read, create: if request.auth != null;
+         allow delete: if request.auth != null
+           && request.auth.uid == resource.data.senderUid;
+       }
      }
    }
    ```

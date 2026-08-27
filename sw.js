@@ -1,13 +1,16 @@
-const VERSION = "vahta-v4";
+const VERSION = "vahta-v8";
 const ASSETS = [
   "./",
   "./index.html",
   "./data.js",
   "./app.js",
   "./docs.js",
+  "./chat.js",
+  "./notifications.js",
   "./auth.js",
   "./firebase-config.js",
   "./cloud-config.js",
+  "./vapid-config.js",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",

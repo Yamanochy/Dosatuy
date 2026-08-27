@@ -268,27 +268,48 @@ function openLightbox(urls) {
   const list = Array.isArray(urls) ? urls : [urls];
   let idx = 0;
 
-  const overlay = el("div", "fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4");
-  const img = el("img", "max-w-full max-h-full rounded-lg");
+  const overlay = el("div", "fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 touch-none");
+  const img = el("img", "max-w-full max-h-full rounded-lg select-none pointer-events-none");
   overlay.appendChild(img);
 
   function show() { img.src = list[idx]; }
   show();
 
+  function goPrev() { idx = (idx - 1 + list.length) % list.length; show(); updateCounter(); }
+  function goNext() { idx = (idx + 1) % list.length; show(); updateCounter(); }
+
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
+  // свайп пальцем влево/вправо для листания фото
+  let touchStartX = null;
+  let touchStartY = null;
+  overlay.addEventListener("touchstart", (e) => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+  overlay.addEventListener("touchend", (e) => {
+    if (touchStartX === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    touchStartX = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) && list.length > 1) {
+      if (dx < 0) goNext(); else goPrev();
+    }
+  }, { passive: true });
+
+  let updateCounter = () => {};
   if (list.length > 1) {
     const counter = el("div", "absolute top-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 px-3 py-1 rounded-full");
-    const updateCounter = () => { counter.textContent = `${idx + 1} / ${list.length}`; };
+    updateCounter = () => { counter.textContent = `${idx + 1} / ${list.length}`; };
     updateCounter();
     overlay.appendChild(counter);
 
     const prev = el("button", "absolute left-2 top-1/2 -translate-y-1/2 text-white text-3xl w-12 h-12 flex items-center justify-center", "‹");
-    prev.onclick = (e) => { e.stopPropagation(); idx = (idx - 1 + list.length) % list.length; show(); updateCounter(); };
+    prev.onclick = (e) => { e.stopPropagation(); goPrev(); };
     overlay.appendChild(prev);
 
     const next = el("button", "absolute right-2 top-1/2 -translate-y-1/2 text-white text-3xl w-12 h-12 flex items-center justify-center", "›");
-    next.onclick = (e) => { e.stopPropagation(); idx = (idx + 1) % list.length; show(); updateCounter(); };
+    next.onclick = (e) => { e.stopPropagation(); goNext(); };
     overlay.appendChild(next);
   }
 

@@ -78,28 +78,26 @@ function daysLeftInStage(driver, date) {
 function stageEndDate(driver, date) {
   return addDays(date, daysLeftInStage(driver, date));
 }
-function crewOf(truck, crew, role) {
-  return STATE.drivers.find(d => d.truck === truck && d.crew === crew && d.role === role);
+function driversForTruck(truck) {
+  return STATE.drivers.filter(d => d.truck === truck);
 }
-function activeCrew(truck, date) {
-  const osnA = crewOf(truck, "A", "Основной");
-  if (!osnA) return "A";
-  return driverStatus(osnA, date) === "vahta" ? "A" : "B";
+// сводка по каждому водителю на грузовике на дату: статус, дней до смены, дата смены
+function truckDriverRows(truck, date) {
+  return driversForTruck(truck).map(d => ({
+    driver: d,
+    status: driverStatus(d, date),
+    daysLeft: daysLeftInStage(d, date),
+    switchDate: stageEndDate(d, date),
+  })).sort((a, b) => {
+    if (a.status !== b.status) return a.status === "vahta" ? -1 : 1;
+    return a.daysLeft - b.daysLeft;
+  });
 }
-function crewDrivers(truck, crew) {
-  const osn = crewOf(truck, crew, "Основной");
-  const nap = crewOf(truck, crew, "Напарник");
-  return [osn, nap].filter(Boolean);
-}
-function truckSnapshot(truck, date) {
-  const crew = activeCrew(truck, date);
-  const other = crew === "A" ? "B" : "A";
-  const active = crewDrivers(truck, crew);
-  const next = crewDrivers(truck, other);
-  const refDriver = active[0] || active[1];
-  const daysLeft = refDriver ? daysLeftInStage(refDriver, date) : null;
-  const switchDate = refDriver ? stageEndDate(refDriver, date) : null;
-  return { crew, active, next, daysLeft, switchDate };
+// имена водителей грузовика, которые на вахте в конкретный день (для календаря)
+function activeNamesForTruck(truck, date) {
+  return driversForTruck(truck)
+    .filter(d => driverStatus(d, date) === "vahta")
+    .map(d => d.name);
 }
 
 // ============================================================
@@ -110,10 +108,12 @@ let currentTab = "dashboard";
 
 function render() {
   const today = toDateOnly(new Date());
+  if (currentTab !== "chat") removeChatInputBar();
   if (currentTab === "dashboard") renderDashboard(today);
   else if (currentTab === "overview") renderOverview(today);
   else if (currentTab === "calendar") renderCalendar(today);
   else if (currentTab === "documents") renderDocuments();
+  else if (currentTab === "chat") renderChat();
   else if (currentTab === "settings" && currentProfile.role === "manager") renderSettings();
   else { currentTab = "dashboard"; renderDashboard(today); }
   document.querySelectorAll(".tabbtn").forEach(b => {
@@ -144,51 +144,55 @@ function renderDashboard(today) {
   wrap.appendChild(dateCard);
 
   STATE.trucks.forEach(truck => {
-    const snap = truckSnapshot(truck, today);
-    const activeNames = snap.active.map(d => `${d.name}${d.role === "Напарник" ? " (напарник)" : ""}`).join(" + ");
-    const nextNames = snap.next.map(d => d.name).join(" + ");
-    const urgent = snap.daysLeft !== null && snap.daysLeft <= 5;
+    const rows = truckDriverRows(truck, today);
+    const onVahtaCount = rows.filter(r => r.status === "vahta").length;
 
     const card = el("div", "bg-white rounded-2xl shadow-sm overflow-hidden");
-    card.innerHTML = `
-      <div class="bg-gradient-to-r from-slate-800 to-slate-700 text-white px-4 py-3 flex items-center gap-2">
-        <span class="text-2xl">🚛</span>
-        <span class="font-bold text-lg">${truck}</span>
-        <span class="ml-auto text-xs bg-white/15 px-2 py-1 rounded-full">Экипаж ${snap.crew}</span>
-      </div>
-      <div class="p-4 space-y-3">
-        <div class="flex items-center gap-2">
-          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-          <span class="font-semibold text-slate-700">На вахте:</span>
-          <span class="text-slate-800">${activeNames || "—"}</span>
+    const header = el("div", "bg-gradient-to-r from-slate-800 to-slate-700 text-white px-4 py-3 flex items-center gap-2");
+    header.innerHTML = `
+      <span class="text-2xl">🚛</span>
+      <span class="font-bold text-lg">${truck}</span>
+      <span class="ml-auto text-xs bg-white/15 px-2 py-1 rounded-full">${onVahtaCount} на вахте</span>`;
+    card.appendChild(header);
+
+    const body = el("div", "divide-y divide-slate-100");
+    if (!rows.length) {
+      body.appendChild(el("div", "p-4 text-sm text-slate-400", "Нет водителей, назначенных на эту машину."));
+    }
+    rows.forEach(r => {
+      const isVahta = r.status === "vahta";
+      const urgent = isVahta && r.daysLeft <= 5;
+      const row = el("div", "p-4 flex items-center gap-3");
+      row.innerHTML = `
+        <span class="w-2.5 h-2.5 rounded-full shrink-0 ${isVahta ? "bg-emerald-500" : "bg-slate-300"}"></span>
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-slate-800 truncate">${escapeHtml(r.driver.name)}</div>
+          <div class="text-xs text-slate-400">${isVahta ? "На вахте" : "Дома"}${r.driver.role ? " · " + escapeHtml(r.driver.role) : ""}</div>
         </div>
-        <div class="grid grid-cols-2 gap-3 pt-1">
-          <div class="rounded-xl ${urgent ? "bg-amber-50" : "bg-slate-50"} p-3">
-            <div class="text-xs text-slate-400 font-semibold">Дней до смены</div>
-            <div class="text-2xl font-bold ${urgent ? "text-amber-600" : "text-slate-800"}">${snap.daysLeft ?? "—"}</div>
-          </div>
-          <div class="rounded-xl bg-slate-50 p-3">
-            <div class="text-xs text-slate-400 font-semibold">Дата пересменки</div>
-            <div class="text-base font-bold text-slate-800 pt-1">${snap.switchDate ? fmtRU(snap.switchDate) : "—"}</div>
-          </div>
-        </div>
-        <div class="text-sm text-slate-500 pt-1">Следующий экипаж: <span class="font-semibold text-slate-700">${nextNames || "—"}</span></div>
-      </div>`;
+        <div class="text-right shrink-0">
+          <div class="text-xs ${urgent ? "text-amber-600 font-bold" : "text-slate-400"}">${isVahta ? "дней до смены" : "выходит через"}</div>
+          <div class="text-lg font-bold ${urgent ? "text-amber-600" : "text-slate-700"}">${r.daysLeft}</div>
+          <div class="text-[11px] text-slate-400">${fmtRU(r.switchDate)}</div>
+        </div>`;
+      body.appendChild(row);
+    });
+    card.appendChild(body);
     wrap.appendChild(card);
   });
 
-  // ближайшие пересменки
-  const upcoming = STATE.trucks.map(truck => {
-    const snap = truckSnapshot(truck, today);
-    return { truck, date: snap.switchDate, next: snap.next.map(d => d.name).join(" + ") };
-  }).sort((a, b) => a.date - b.date);
+  // ближайшие пересменки — по каждому водителю индивидуально
+  const upcoming = STATE.drivers
+    .map(d => ({ driver: d, switchDate: stageEndDate(d, today), status: driverStatus(d, today) }))
+    .sort((a, b) => a.switchDate - b.switchDate)
+    .slice(0, 6);
 
   const upCard = el("div", "bg-white rounded-2xl shadow-sm p-4");
   upCard.innerHTML = `<div class="font-bold text-slate-700 mb-3 flex items-center gap-2"><span>🔄</span>Ближайшие пересменки</div>`;
   const list = el("div", "space-y-2");
   upcoming.forEach(u => {
     const row = el("div", "flex items-center justify-between text-sm bg-slate-50 rounded-xl px-3 py-2");
-    row.innerHTML = `<span class="font-semibold text-slate-600">${u.truck}</span><span class="text-slate-500">${fmtRU(u.date)}</span><span class="text-slate-700 font-medium">${u.next}</span>`;
+    const action = u.status === "vahta" ? "уезжает" : "заступает";
+    row.innerHTML = `<span class="font-semibold text-slate-600 truncate">${escapeHtml(u.driver.name)}</span><span class="text-slate-400 text-xs">${action}</span><span class="text-slate-700 font-medium">${fmtRU(u.switchDate)}</span>`;
     list.appendChild(row);
   });
   upCard.appendChild(list);
@@ -286,19 +290,18 @@ function renderCalendar(today) {
     const weekend = isWeekend(d);
 
     const rows = STATE.trucks.map(truck => {
-      const crew = activeCrew(truck, d);
-      const names = crewDrivers(truck, crew).map(x => x.name).join(" + ");
-      return { truck, crew, names };
+      const names = activeNamesForTruck(truck, d);
+      return { truck, names: names.join(" + ") };
     });
 
-    // определяем день пересменки (сравнение с предыдущим днём)
+    // определяем день пересменки (сравнение состава на вахте с предыдущим днём)
     let switchInfo = null;
     if (i > 0) {
       const prevD = addDays(d, -1);
       STATE.trucks.forEach(truck => {
-        if (activeCrew(truck, d) !== activeCrew(truck, prevD)) {
-          switchInfo = truck;
-        }
+        const a = activeNamesForTruck(truck, d).sort().join(",");
+        const b = activeNamesForTruck(truck, prevD).sort().join(",");
+        if (a !== b) switchInfo = truck;
       });
     }
 
@@ -311,7 +314,7 @@ function renderCalendar(today) {
     row.appendChild(dateCol);
 
     const infoCol = el("div", "flex-1 text-xs space-y-0.5");
-    infoCol.innerHTML = rows.map(r => `<div><span class="font-semibold text-slate-500">${r.truck.replace("Шакман ","")}</span> <span class="text-slate-700">${r.names}</span></div>`).join("");
+    infoCol.innerHTML = rows.map(r => `<div><span class="font-semibold text-slate-500">${r.truck.replace("Шакман ","")}</span> <span class="text-slate-700">${r.names || "— никого нет на вахте —"}</span></div>`).join("");
     row.appendChild(infoCol);
 
     if (switchInfo) {
@@ -436,10 +439,11 @@ function buildNav() {
   const nav = document.getElementById("nav");
   const isManager = currentProfile.role === "manager";
   nav.innerHTML = `
-    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-3 py-1 text-slate-400 text-[11px] font-medium" data-tab="dashboard"><span class="tabicon text-xl transition-transform">🏠</span>Дашборд</button>
-    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-3 py-1 text-slate-400 text-[11px] font-medium" data-tab="overview"><span class="tabicon text-xl transition-transform">🗓️</span>Обзор</button>
-    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-3 py-1 text-slate-400 text-[11px] font-medium" data-tab="calendar"><span class="tabicon text-xl transition-transform">📆</span>По дням</button>
-    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-3 py-1 text-slate-400 text-[11px] font-medium" data-tab="documents"><span class="tabicon text-xl transition-transform">📄</span>ТТН</button>
-    ${isManager ? `<button class="tabbtn relative flex flex-col items-center gap-0.5 px-3 py-1 text-slate-400 text-[11px] font-medium" data-tab="settings"><span class="tabicon text-xl transition-transform">⚙️</span>Настройки</button>` : ""}`;
+    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="dashboard"><span class="tabicon text-xl transition-transform">🏠</span>Дашборд</button>
+    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="overview"><span class="tabicon text-xl transition-transform">🗓️</span>Обзор</button>
+    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="calendar"><span class="tabicon text-xl transition-transform">📆</span>По дням</button>
+    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="documents"><span class="tabicon text-xl transition-transform">📄</span>ТТН</button>
+    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="chat"><span class="tabicon text-xl transition-transform">💬</span>Чат</button>
+    ${isManager ? `<button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="settings"><span class="tabicon text-xl transition-transform">⚙️</span>Настройки</button>` : ""}`;
 }
 
