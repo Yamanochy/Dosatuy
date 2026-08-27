@@ -117,14 +117,21 @@ function renderAddForm() {
       </select>
     </label>
     <label class="block text-xs text-slate-500">ФИО водителя
-      <input id="df-driver" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm" value="${currentProfile?.role === "driver" ? escapeHtml(currentProfile.name) : ""}" />
+      <select id="df-driver-select" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white"></select>
+      <input id="df-driver-other" placeholder="Впиши ФИО" class="mt-2 hidden w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm" />
     </label>
     <label class="block text-xs text-slate-500">Вес груза, кг
       <input id="df-weight" type="number" min="0" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm" placeholder="напр. 18500" />
     </label>
-    <label class="block text-xs text-slate-500">Фото ТТН / путевого листа
-      <input id="df-photo" type="file" accept="image/*" capture="environment" class="mt-1 w-full text-sm" />
-    </label>
+    <div>
+      <div class="block text-xs text-slate-500 mb-1">Фото ТТН / путевого листа</div>
+      <div class="flex gap-2">
+        <button type="button" id="df-btn-camera" class="flex-1 py-2.5 rounded-lg bg-slate-700 text-white text-sm font-semibold flex items-center justify-center gap-1.5">📷 Камера</button>
+        <button type="button" id="df-btn-gallery" class="flex-1 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-sm font-semibold flex items-center justify-center gap-1.5">🖼️ Галерея</button>
+      </div>
+      <input id="df-photo-camera" type="file" accept="image/*" capture="environment" class="hidden" />
+      <input id="df-photo-gallery" type="file" accept="image/*" class="hidden" />
+    </div>
     <div id="df-preview" class="hidden"><img class="w-full rounded-lg max-h-48 object-contain bg-slate-50" /></div>
     <div id="df-error" class="text-xs text-rose-600 hidden"></div>
     <div class="flex gap-2 pt-1">
@@ -132,8 +139,23 @@ function renderAddForm() {
       <button id="df-cancel" class="px-4 py-2.5 rounded-lg bg-slate-100 text-slate-500 font-semibold text-sm">Отмена</button>
     </div>`;
 
-  card.querySelector("#df-photo").onchange = (e) => {
-    selectedFile = e.target.files[0] || null;
+  // список водителей — из графика вахт + опция "другой"
+  const driverNames = [...new Set(STATE.drivers.map((d) => d.name))];
+  const driverSelect = card.querySelector("#df-driver-select");
+  const otherInput = card.querySelector("#df-driver-other");
+  driverSelect.innerHTML =
+    `<option value="">Выбери водителя</option>` +
+    driverNames.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("") +
+    `<option value="__other__">Другой (вписать ФИО)</option>`;
+  const preselect = currentProfile?.role === "driver" &&
+    driverNames.find((n) => n.toLowerCase() === currentProfile.name.toLowerCase());
+  if (preselect) driverSelect.value = preselect;
+  driverSelect.onchange = () => {
+    otherInput.classList.toggle("hidden", driverSelect.value !== "__other__");
+  };
+
+  const handlePhoto = (file) => {
+    selectedFile = file || null;
     const prev = card.querySelector("#df-preview");
     if (selectedFile) {
       const reader = new FileReader();
@@ -146,6 +168,12 @@ function renderAddForm() {
       prev.classList.add("hidden");
     }
   };
+  const camInput = card.querySelector("#df-photo-camera");
+  const galInput = card.querySelector("#df-photo-gallery");
+  card.querySelector("#df-btn-camera").onclick = () => camInput.click();
+  card.querySelector("#df-btn-gallery").onclick = () => galInput.click();
+  camInput.onchange = (e) => handlePhoto(e.target.files[0]);
+  galInput.onchange = (e) => handlePhoto(e.target.files[0]);
 
   card.querySelector("#df-cancel").onclick = () => { addFormOpen = false; render(); };
 
@@ -153,7 +181,9 @@ function renderAddForm() {
     const ttnNumber = card.querySelector("#df-ttn").value.trim();
     const ttnDate = card.querySelector("#df-date").value;
     const truck = card.querySelector("#df-truck").value;
-    const driverName = card.querySelector("#df-driver").value.trim();
+    const driverName = driverSelect.value === "__other__"
+      ? otherInput.value.trim()
+      : driverSelect.value;
     const weight = card.querySelector("#df-weight").value;
     const errBox = card.querySelector("#df-error");
     const saveBtn = card.querySelector("#df-save");
