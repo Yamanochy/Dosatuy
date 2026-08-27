@@ -31,8 +31,10 @@ Cloudinary (хранение фото). Карта нигде не нужна.
        }
        match /chatMessages/{msgId} {
          allow read, create: if request.auth != null;
-         allow delete: if request.auth != null
-           && request.auth.uid == resource.data.senderUid;
+         allow delete: if request.auth != null && (
+           request.auth.uid == resource.data.senderUid ||
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'manager'
+         );
        }
        match /settings/{docId} {
          allow read: if request.auth != null;

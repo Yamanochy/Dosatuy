@@ -8,6 +8,9 @@ let docsCache = [];
 let docsUnsub = null;
 let addFormOpen = false;
 let selectedFiles = []; // массив File, до MAX_PHOTOS
+let docsFilterFrom = ""; // фильтр по дате ТТН, ISO "YYYY-MM-DD"
+let docsFilterTo = "";
+let docsShowArchive = false; // false = текущая неделя, true = архив (до вторника)
 
 function subscribeDocs() {
   if (docsUnsub) return;
@@ -18,6 +21,36 @@ function subscribeDocs() {
     }, (err) => {
       console.error(err);
     });
+}
+
+// ближайший (текущий или прошедший) вторник, 00:00 по местному времени —
+// граница архива: всё, что добавлено раньше — уходит в «Архив»
+function mostRecentTuesday(date = new Date()) {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const day = d.getDay(); // 0=вс,1=пн,2=вт...
+  const diff = (day - 2 + 7) % 7;
+  d.setDate(d.getDate() - diff);
+  return d;
+}
+
+function splitCurrentArchive(list) {
+  const boundary = mostRecentTuesday();
+  const current = [], archived = [];
+  list.forEach((doc) => {
+    const t = doc.uploadedAt && doc.uploadedAt.toDate ? doc.uploadedAt.toDate() : null;
+    if (t && t < boundary) archived.push(doc); else current.push(doc);
+  });
+  return { current, archived };
+}
+
+function applyDateFilter(list) {
+  if (!docsFilterFrom && !docsFilterTo) return list;
+  return list.filter((doc) => {
+    if (!doc.ttnDate) return false;
+    if (docsFilterFrom && doc.ttnDate < docsFilterFrom) return false;
+    if (docsFilterTo && doc.ttnDate > docsFilterTo) return false;
+    return true;
+  });
 }
 
 // сжимаем фото на телефоне перед отправкой — экономит трафик в Досатуе
@@ -64,11 +97,47 @@ function renderDocuments() {
 
   if (addFormOpen) wrap.appendChild(renderAddForm());
 
-  if (!docsCache.length) {
-    wrap.appendChild(el("div", "text-center text-slate-400 text-sm py-8", "Пока нет загруженных документов"));
+  const { current, archived } = splitCurrentArchive(docsCache);
+
+  // переключатель Текущие / Архив
+  const toggleRow = el("div", "flex gap-2");
+  const btnCurrent = el("button", `flex-1 py-2 rounded-xl text-sm font-semibold ${!docsShowArchive ? "bg-slate-800 text-white" : "bg-white text-slate-500"}`, `Текущие (${current.length})`);
+  const btnArchive = el("button", `flex-1 py-2 rounded-xl text-sm font-semibold ${docsShowArchive ? "bg-slate-800 text-white" : "bg-white text-slate-500"}`, `📦 Архив (${archived.length})`);
+  btnCurrent.onclick = () => { docsShowArchive = false; render(); };
+  btnArchive.onclick = () => { docsShowArchive = true; render(); };
+  toggleRow.appendChild(btnCurrent);
+  toggleRow.appendChild(btnArchive);
+  wrap.appendChild(toggleRow);
+
+  // фильтр по дате ТТН
+  const filterCard = el("div", "bg-white rounded-2xl shadow-sm p-3 flex items-end gap-2");
+  filterCard.innerHTML = `
+    <label class="text-xs text-slate-500 flex-1">С даты
+      <input id="doc-filter-from" type="date" value="${docsFilterFrom}" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm" />
+    </label>
+    <label class="text-xs text-slate-500 flex-1">По дату
+      <input id="doc-filter-to" type="date" value="${docsFilterTo}" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm" />
+    </label>`;
+  const clearBtn = el("button", "text-xs text-slate-400 underline shrink-0 pb-1.5", "Сбросить");
+  clearBtn.onclick = () => { docsFilterFrom = ""; docsFilterTo = ""; render(); };
+  filterCard.appendChild(clearBtn);
+  wrap.appendChild(filterCard);
+  setTimeout(() => {
+    const fFrom = document.getElementById("doc-filter-from");
+    const fTo = document.getElementById("doc-filter-to");
+    if (fFrom) fFrom.onchange = () => { docsFilterFrom = fFrom.value; render(); };
+    if (fTo) fTo.onchange = () => { docsFilterTo = fTo.value; render(); };
+  }, 0);
+
+  const baseList = docsShowArchive ? archived : current;
+  const shownList = applyDateFilter(baseList);
+
+  if (!shownList.length) {
+    wrap.appendChild(el("div", "text-center text-slate-400 text-sm py-8",
+      docsCache.length ? "Ничего не найдено по этим фильтрам" : "Пока нет загруженных документов"));
   }
 
-  docsCache.forEach((doc) => {
+  shownList.forEach((doc) => {
     const photos = doc.photoUrls || (doc.photoUrl ? [doc.photoUrl] : []);
     const card = el("div", "bg-white rounded-2xl shadow-sm overflow-hidden flex gap-3 p-3");
 
@@ -143,7 +212,7 @@ function renderAddForm() {
         <button type="button" id="df-btn-gallery" class="flex-1 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-sm font-semibold flex items-center justify-center gap-1.5">🖼️ Галерея</button>
       </div>
       <input id="df-photo-camera" type="file" accept="image/*" capture="environment" class="hidden" />
-      <input id="df-photo-gallery" type="file" accept="image/*" class="hidden" />
+      <input id="df-photo-gallery" type="file" accept="image/*" multiple class="hidden" />
       <div id="df-thumbs" class="grid grid-cols-3 gap-2 mt-2"></div>
     </div>
     <div id="df-error" class="text-xs text-rose-600 hidden"></div>
@@ -264,13 +333,62 @@ function renderAddForm() {
   return card;
 }
 
+// ---------- скачать / отправить фото ----------
+async function fetchAsFile(url, filename) {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error("Не удалось загрузить фото");
+  const blob = await resp.blob();
+  return new File([blob], filename, { type: blob.type || "image/jpeg" });
+}
+
+async function downloadPhoto(url, btn) {
+  const oldText = btn ? btn.textContent : "";
+  try {
+    if (btn) btn.textContent = "…";
+    const file = await fetchAsFile(url, "ttn-" + Date.now() + ".jpg");
+    const blobUrl = URL.createObjectURL(file);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 8000);
+  } catch (e) {
+    alert("Не удалось скачать фото: " + e.message);
+  } finally {
+    if (btn) btn.textContent = oldText;
+  }
+}
+
+async function sharePhoto(url, btn) {
+  const oldText = btn ? btn.textContent : "";
+  try {
+    if (btn) btn.textContent = "…";
+    const file = await fetchAsFile(url, "ttn-" + Date.now() + ".jpg");
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file] });
+    } else if (navigator.share) {
+      await navigator.share({ url });
+    } else {
+      window.open(url, "_blank");
+    }
+  } catch (e) {
+    if (e.name !== "AbortError") alert("Не удалось отправить фото: " + e.message);
+  } finally {
+    if (btn) btn.textContent = oldText;
+  }
+}
+
 function openLightbox(urls) {
   const list = Array.isArray(urls) ? urls : [urls];
   let idx = 0;
 
-  const overlay = el("div", "fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 touch-none");
+  const overlay = el("div", "fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center p-4 touch-none");
+  const imgWrap = el("div", "flex-1 flex items-center justify-center w-full min-h-0");
   const img = el("img", "max-w-full max-h-full rounded-lg select-none pointer-events-none");
-  overlay.appendChild(img);
+  imgWrap.appendChild(img);
+  overlay.appendChild(imgWrap);
 
   function show() { img.src = list[idx]; }
   show();
@@ -278,7 +396,7 @@ function openLightbox(urls) {
   function goPrev() { idx = (idx - 1 + list.length) % list.length; show(); updateCounter(); }
   function goNext() { idx = (idx + 1) % list.length; show(); updateCounter(); }
 
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.onclick = (e) => { if (e.target === overlay || e.target === imgWrap) overlay.remove(); };
 
   // свайп пальцем влево/вправо для листания фото
   let touchStartX = null;
@@ -312,6 +430,16 @@ function openLightbox(urls) {
     next.onclick = (e) => { e.stopPropagation(); goNext(); };
     overlay.appendChild(next);
   }
+
+  // нижняя панель — скачать / отправить
+  const toolbar = el("div", "flex gap-3 pt-4 shrink-0");
+  const dlBtn = el("button", "px-4 py-2.5 rounded-full bg-white/15 text-white text-sm font-semibold flex items-center gap-1.5", "⬇️ Скачать");
+  dlBtn.onclick = (e) => { e.stopPropagation(); downloadPhoto(list[idx], dlBtn); };
+  const shareBtn = el("button", "px-4 py-2.5 rounded-full bg-white/15 text-white text-sm font-semibold flex items-center gap-1.5", "📤 Отправить");
+  shareBtn.onclick = (e) => { e.stopPropagation(); sharePhoto(list[idx], shareBtn); };
+  toolbar.appendChild(dlBtn);
+  toolbar.appendChild(shareBtn);
+  overlay.appendChild(toolbar);
 
   document.body.appendChild(overlay);
 }

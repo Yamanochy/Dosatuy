@@ -438,6 +438,46 @@ function renderSettings() {
     }
   };
 
+  // ---------- аккаунты пользователей (логины + сброс пароля) ----------
+  const accountsCard = el("div", "bg-white rounded-2xl shadow-sm p-4");
+  accountsCard.innerHTML = `
+    <div class="font-bold text-slate-700 mb-1">Аккаунты пользователей</div>
+    <div class="text-xs text-slate-400 mb-3">Пароли не хранятся и не показываются — так устроена любая безопасная система. Можно отправить водителю письмо для установки нового пароля.</div>
+    <div id="accounts-list" class="text-sm text-slate-400">Загрузка…</div>`;
+  wrap.appendChild(accountsCard);
+
+  db.collection("users").get().then((snap) => {
+    const listEl = accountsCard.querySelector("#accounts-list");
+    listEl.innerHTML = "";
+    if (snap.empty) { listEl.textContent = "Пока нет зарегистрированных пользователей."; return; }
+    snap.forEach((doc) => {
+      const u = doc.data();
+      const row = el("div", "border-t border-slate-100 py-2.5 first:border-t-0 first:pt-0 flex items-center gap-2");
+      const info = el("div", "flex-1 min-w-0");
+      info.innerHTML = `
+        <div class="font-semibold text-slate-700 truncate">${escapeHtml(u.name || "—")}${u.role === "manager" ? " · рук." : ""}</div>
+        <div class="text-xs text-slate-400 truncate">${escapeHtml(u.email || "—")}</div>`;
+      row.appendChild(info);
+      const resetPwBtn = el("button", "shrink-0 text-xs text-slate-500 bg-slate-100 px-2.5 py-1.5 rounded-lg font-medium", "Сброс пароля");
+      resetPwBtn.onclick = async () => {
+        if (!u.email) return alert("У этого аккаунта не указан email.");
+        if (!confirm(`Отправить письмо для смены пароля на ${u.email}?`)) return;
+        resetPwBtn.textContent = "…";
+        try {
+          await auth.sendPasswordResetEmail(u.email);
+          alert("Письмо отправлено на " + u.email);
+        } catch (e) {
+          alert("Не удалось отправить: " + e.message);
+        }
+        resetPwBtn.textContent = "Сброс пароля";
+      };
+      row.appendChild(resetPwBtn);
+      listEl.appendChild(row);
+    });
+  }).catch((e) => {
+    accountsCard.querySelector("#accounts-list").textContent = "Не удалось загрузить: " + e.message;
+  });
+
   app.appendChild(wrap);
 }
 

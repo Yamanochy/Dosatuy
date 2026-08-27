@@ -66,7 +66,7 @@ function renderChat() {
 
   const wrap = el("div", "pb-24");
 
-  const header = el("div", "bg-white rounded-2xl shadow-sm px-4 py-3 mb-3 flex items-center gap-2");
+  const header = el("div", "bg-white rounded-2xl shadow-sm px-4 py-3 mb-3 flex items-center gap-2 flex-wrap");
   header.innerHTML = `<span class="text-xl">💬</span><span class="font-bold text-slate-700">Общий чат команды</span>`;
   const pushStatus = pushPermissionStatus();
   if (pushStatus === "default") {
@@ -84,6 +84,11 @@ function renderChat() {
   } else if (pushStatus === "denied") {
     header.appendChild(el("span", "ml-auto text-xs text-slate-400", "🔕 запрещены в браузере"));
   }
+  if (currentProfile?.role === "manager") {
+    const clearBtn = el("button", "text-xs text-rose-500 font-semibold shrink-0 basis-full text-right", "🗑 Очистить чат");
+    clearBtn.onclick = clearAllChat;
+    header.appendChild(clearBtn);
+  }
   wrap.appendChild(header);
 
   const list = el("div", "space-y-2");
@@ -94,6 +99,25 @@ function renderChat() {
   renderChatMessages();
   renderChatInputBar();
   markChatAsRead();
+}
+
+async function clearAllChat() {
+  if (!confirm("Удалить ВСЕ сообщения чата? Это действие нельзя отменить.")) return;
+  try {
+    const snap = await db.collection("chatMessages").get();
+    let batch = db.batch();
+    let count = 0;
+    const commits = [];
+    snap.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      count++;
+      if (count === 450) { commits.push(batch.commit()); batch = db.batch(); count = 0; }
+    });
+    if (count > 0) commits.push(batch.commit());
+    await Promise.all(commits);
+  } catch (e) {
+    alert("Не удалось очистить чат: " + e.message);
+  }
 }
 
 
@@ -116,13 +140,32 @@ function renderChatMessages() {
       list.appendChild(divider);
     }
     const isMine = currentUser && m.senderUid === currentUser.uid;
-    const row = el("div", `flex ${isMine ? "justify-end" : "justify-start"}`);
-    const bubble = el("div", `max-w-[75%] rounded-2xl px-3 py-2 ${isMine ? "bg-slate-800 text-white rounded-br-sm" : "bg-white text-slate-800 rounded-bl-sm shadow-sm"}`);
+    const canDelete = isMine || currentProfile?.role === "manager";
+    const row = el("div", `flex items-end gap-1.5 ${isMine ? "justify-end" : "justify-start"}`);
+
+    if (canDelete) {
+      const delBtn = el("button", `text-slate-300 text-xs shrink-0 ${isMine ? "order-1" : "order-2"}`, "✕");
+      delBtn.onclick = () => {
+        if (confirm("Удалить это сообщение?")) db.collection("chatMessages").doc(m.id).delete();
+      };
+      row.appendChild(delBtn);
+    }
+
+    const bubble = el("div", `max-w-[70%] rounded-2xl px-3 py-2 ${isMine ? "bg-slate-800 text-white rounded-br-sm order-none" : "bg-white text-slate-800 rounded-bl-sm shadow-sm order-1"}`);
     const roleTag = m.senderRole === "manager" ? " · рук." : "";
-    bubble.innerHTML = `
-      ${!isMine ? `<div class="text-[11px] font-semibold ${isMine ? "text-slate-300" : "text-slate-400"} mb-0.5">${escapeHtml(m.senderName || "")}${roleTag}</div>` : ""}
-      <div class="text-sm whitespace-pre-wrap break-words">${escapeHtml(m.text)}</div>
-      <div class="text-[10px] ${isMine ? "text-slate-300" : "text-slate-400"} text-right mt-0.5">${fmtChatTime(m.createdAt)}</div>`;
+    let bodyHtml = "";
+    if (!isMine) bodyHtml += `<div class="text-[11px] font-semibold text-slate-400 mb-0.5">${escapeHtml(m.senderName || "")}${roleTag}</div>`;
+    if (m.imageUrl) {
+      bodyHtml += `<img src="${m.imageUrl}" class="rounded-lg max-h-56 w-full object-cover cursor-pointer mb-1" />`;
+    }
+    if (m.text) {
+      bodyHtml += `<div class="text-sm whitespace-pre-wrap break-words">${escapeHtml(m.text)}</div>`;
+    }
+    bodyHtml += `<div class="text-[10px] ${isMine ? "text-slate-300" : "text-slate-400"} text-right mt-0.5">${fmtChatTime(m.createdAt)}</div>`;
+    bubble.innerHTML = bodyHtml;
+    if (m.imageUrl) {
+      bubble.querySelector("img").onclick = () => openLightbox(m.imageUrl);
+    }
     row.appendChild(bubble);
     list.appendChild(row);
   });
@@ -132,22 +175,54 @@ function renderChatMessages() {
   }
 }
 
+let chatPendingImage = null; // File — фото, прикреплённое к следующему сообщению
+
 function renderChatInputBar() {
   const existing = document.getElementById("chat-input-bar");
   if (existing) existing.remove();
 
   const bar = el("div", "fixed left-0 right-0 bottom-[64px] px-3 pb-2 z-10");
   bar.id = "chat-input-bar";
-  const inner = el("div", "max-w-md mx-auto bg-white rounded-2xl shadow-lg p-2 flex items-end gap-2 border border-slate-100");
+  const inner = el("div", "max-w-md mx-auto bg-white rounded-2xl shadow-lg p-2 border border-slate-100");
   inner.innerHTML = `
-    <textarea id="chat-text" rows="1" placeholder="Написать сообщение…"
-      class="flex-1 resize-none max-h-24 border-0 focus:ring-0 outline-none text-sm px-2 py-2"></textarea>
-    <button id="chat-send" class="shrink-0 bg-slate-800 text-white rounded-full w-10 h-10 flex items-center justify-center text-lg">➤</button>`;
+    <div id="chat-img-preview" class="hidden relative w-16 h-16 mb-2">
+      <img class="w-16 h-16 object-cover rounded-lg" />
+      <button id="chat-img-remove" type="button" class="absolute -top-1.5 -right-1.5 bg-slate-800 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">✕</button>
+    </div>
+    <div class="flex items-end gap-2">
+      <button id="chat-attach" type="button" class="shrink-0 text-slate-400 w-9 h-9 flex items-center justify-center text-xl">📎</button>
+      <input id="chat-photo-input" type="file" accept="image/*" class="hidden" />
+      <textarea id="chat-text" rows="1" placeholder="Написать сообщение…"
+        class="flex-1 resize-none max-h-24 border-0 focus:ring-0 outline-none text-sm px-2 py-2"></textarea>
+      <button id="chat-send" class="shrink-0 bg-slate-800 text-white rounded-full w-10 h-10 flex items-center justify-center text-lg">➤</button>
+    </div>`;
   bar.appendChild(inner);
   document.body.appendChild(bar);
 
   const textarea = document.getElementById("chat-text");
   const sendBtn = document.getElementById("chat-send");
+  const attachBtn = document.getElementById("chat-attach");
+  const photoInput = document.getElementById("chat-photo-input");
+  const preview = document.getElementById("chat-img-preview");
+  const removeBtn = document.getElementById("chat-img-remove");
+
+  attachBtn.onclick = () => photoInput.click();
+  photoInput.onchange = (e) => {
+    const file = e.target.files[0];
+    photoInput.value = "";
+    if (!file) return;
+    chatPendingImage = file;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      preview.querySelector("img").src = ev.target.result;
+      preview.classList.remove("hidden");
+    };
+    reader.readAsDataURL(file);
+  };
+  removeBtn.onclick = () => {
+    chatPendingImage = null;
+    preview.classList.add("hidden");
+  };
 
   textarea.addEventListener("input", () => {
     textarea.style.height = "auto";
@@ -156,22 +231,32 @@ function renderChatInputBar() {
 
   async function send() {
     const text = textarea.value.trim();
-    if (!text) return;
+    if (!text && !chatPendingImage) return;
     textarea.value = "";
     textarea.style.height = "auto";
     sendBtn.disabled = true;
     try {
+      let imageUrl = null;
+      if (chatPendingImage) {
+        sendBtn.textContent = "…";
+        const resized = await resizeImage(chatPendingImage);
+        imageUrl = await uploadToCloudinary(resized);
+      }
       await db.collection("chatMessages").add({
         text,
+        imageUrl: imageUrl || null,
         senderUid: currentUser.uid,
         senderName: currentProfile.name,
         senderRole: currentProfile.role,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
+      chatPendingImage = null;
+      preview.classList.add("hidden");
     } catch (e) {
       alert("Не удалось отправить: " + e.message);
     }
     sendBtn.disabled = false;
+    sendBtn.textContent = "➤";
     textarea.focus();
   }
 
