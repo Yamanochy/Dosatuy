@@ -461,6 +461,7 @@ function startApp() {
   currentTab = "dashboard";
   render();
   subscribeCloudSettings();
+  if (typeof clearUnreadBadge === "function") clearUnreadBadge();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
