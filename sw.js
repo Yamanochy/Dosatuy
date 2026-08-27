@@ -1,4 +1,4 @@
-const VERSION = "vahta-v3";
+const VERSION = "vahta-v4";
 const ASSETS = [
   "./",
   "./index.html",
