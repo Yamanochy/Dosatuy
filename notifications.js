@@ -55,8 +55,11 @@ async function enablePushNotifications(silent = false) {
     const reg = await navigator.serviceWorker.ready; // единственный SW — sw.js
     const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
     if (token && currentUser) {
+      // перезаписываем (а не добавляем) — иначе после каждого обновления
+      // service worker'а в базе копятся старые токены того же телефона,
+      // и одно сообщение шлёт несколько уведомлений на одно устройство
       await db.collection("users").doc(currentUser.uid).set(
-        { fcmTokens: firebase.firestore.FieldValue.arrayUnion(token) },
+        { fcmTokens: [token] },
         { merge: true }
       );
     }
