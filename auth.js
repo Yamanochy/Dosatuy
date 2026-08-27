@@ -25,7 +25,7 @@ function renderAuthScreen(mode = "login", errorMsg = "") {
 
   card.innerHTML = `
     <div class="text-center mb-5">
-      <div class="text-3xl mb-1">🚛</div>
+      <img src="icon-192.png" alt="" class="w-16 h-16 rounded-2xl shadow mx-auto mb-2" />
       <div class="font-extrabold text-lg text-slate-800">Вахта 45×45</div>
       <div class="text-xs text-slate-400">п. Досатуй — личный кабинет</div>
     </div>`;

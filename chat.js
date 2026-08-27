@@ -44,6 +44,7 @@ function renderChat() {
     header.appendChild(bellBtn);
   } else if (pushStatus === "granted") {
     header.appendChild(el("span", "ml-auto text-xs text-emerald-600 font-semibold", "🔔 включены"));
+    enablePushNotifications(true); // тихо обновляем подписку на случай, если она "отвалилась"
   } else if (pushStatus === "denied") {
     header.appendChild(el("span", "ml-auto text-xs text-slate-400", "🔕 запрещены в браузере"));
   }

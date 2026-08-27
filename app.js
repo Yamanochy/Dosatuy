@@ -26,6 +26,37 @@ function resetSettings() {
 
 let STATE = loadSettings();
 
+// ---------- облачная синхронизация настроек (Firestore) ----------
+// Firestore — источник истины; localStorage — локальный кэш для
+// мгновенной прорисовки при старте и работы офлайн.
+function settingsDocRef() {
+  return db.collection("settings").doc("schedule");
+}
+let settingsUnsub = null;
+function subscribeCloudSettings() {
+  if (settingsUnsub) return;
+  settingsUnsub = settingsDocRef().onSnapshot((doc) => {
+    if (doc.exists) {
+      const data = doc.data();
+      STATE = {
+        vahta: data.vahta,
+        otdyh: data.otdyh,
+        drivers: data.drivers,
+        trucks: data.trucks,
+      };
+      saveSettings(STATE); // обновляем локальный кэш
+      render();
+    } else if (currentProfile?.role === "manager") {
+      // документа в базе ещё нет — заводим его тем, что уже есть на этом
+      // устройстве (включая уже внесённые правки), чтобы их не потерять
+      settingsDocRef().set(STATE).catch((e) => console.error("seed settings error", e));
+    }
+  }, (err) => console.error("settings sync error", err));
+}
+function saveCloudSettings(newState) {
+  return settingsDocRef().set(newState);
+}
+
 // ---------- дата-математика ----------
 function toDateOnly(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -384,15 +415,26 @@ function renderSettings() {
       const driver = STATE.drivers.find(d => d.id === id);
       if (driver) driver[inp.dataset.field] = inp.value;
     });
-    saveSettings(STATE);
-    const t = document.getElementById("settings-toast");
-    t.classList.remove("hidden");
-    setTimeout(() => t.classList.add("hidden"), 1800);
+    saveSettings(STATE); // локальный кэш — мгновенно
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Сохраняю…";
+    saveCloudSettings(STATE)
+      .then(() => {
+        const t = document.getElementById("settings-toast");
+        t.classList.remove("hidden");
+        setTimeout(() => t.classList.add("hidden"), 1800);
+      })
+      .catch((e) => alert("Не удалось сохранить в общую базу: " + e.message))
+      .finally(() => {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Сохранить";
+      });
   };
   resetBtn.onclick = () => {
-    if (confirm("Сбросить все настройки к заводским значениям?")) {
+    if (confirm("Сбросить все настройки к заводским значениям? Изменения увидят все устройства.")) {
       STATE = resetSettings();
       render();
+      saveCloudSettings(STATE).catch((e) => alert("Не удалось сбросить в общей базе: " + e.message));
     }
   };
 
@@ -418,6 +460,7 @@ function startApp() {
   wireNav();
   currentTab = "dashboard";
   render();
+  subscribeCloudSettings();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});

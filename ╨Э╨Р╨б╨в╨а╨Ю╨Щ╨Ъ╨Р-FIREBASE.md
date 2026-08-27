@@ -34,6 +34,11 @@ Cloudinary (хранение фото). Карта нигде не нужна.
          allow delete: if request.auth != null
            && request.auth.uid == resource.data.senderUid;
        }
+       match /settings/{docId} {
+         allow read: if request.auth != null;
+         allow write: if request.auth != null
+           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'manager';
+       }
      }
    }
    ```

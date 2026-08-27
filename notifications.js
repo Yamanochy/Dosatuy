@@ -1,7 +1,7 @@
 // ============================================================
-// PUSH-УВЕДОМЛЕНИЯ — включаются один раз с кнопки в чате,
-// приходят даже когда приложение закрыто (кроме iPhone без
-// установки на экран "Домой" — см. инструкцию)
+// PUSH-УВЕДОМЛЕНИЯ — используют тот же service worker (sw.js),
+// что и офлайн-кэш приложения, чтобы не было конфликта из-за
+// двух разных SW на одном адресе сайта.
 // ============================================================
 
 let messaging = null;
@@ -14,15 +14,17 @@ function pushPermissionStatus() {
   return Notification.permission; // "default" | "granted" | "denied"
 }
 
-async function enablePushNotifications() {
+// silent=true — не показывать alert при ошибке (используется для тихого
+// автообновления подписки в фоне, когда разрешение уже когда-то дано)
+async function enablePushNotifications(silent = false) {
   if (!messaging) {
-    alert("Этот браузер не поддерживает push-уведомления.");
+    if (!silent) alert("Этот браузер не поддерживает push-уведомления.");
     return false;
   }
   try {
     const permission = await Notification.requestPermission();
     if (permission !== "granted") return false;
-    const reg = await navigator.serviceWorker.register("firebase-messaging-sw.js");
+    const reg = await navigator.serviceWorker.ready; // единственный SW — sw.js
     const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
     if (token && currentUser) {
       await db.collection("users").doc(currentUser.uid).set(
@@ -33,7 +35,7 @@ async function enablePushNotifications() {
     return true;
   } catch (e) {
     console.error("Push enable error", e);
-    alert("Не удалось включить уведомления: " + e.message);
+    if (!silent) alert("Не удалось включить уведомления: " + e.message);
     return false;
   }
 }
