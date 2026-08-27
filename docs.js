@@ -380,6 +380,52 @@ async function sharePhoto(url, btn) {
   }
 }
 
+// ---------- скачать / отправить ВСЕ фото записи сразу ----------
+async function downloadAllPhotos(urls, btn) {
+  const oldText = btn ? btn.textContent : "";
+  try {
+    for (let i = 0; i < urls.length; i++) {
+      if (btn) btn.textContent = `Скачиваю ${i + 1}/${urls.length}…`;
+      const file = await fetchAsFile(urls[i], `ttn-${Date.now()}-${i + 1}.jpg`);
+      const blobUrl = URL.createObjectURL(file);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 8000);
+      if (i < urls.length - 1) await new Promise((r) => setTimeout(r, 400)); // иначе телефон блокирует "спам" скачиваний
+    }
+  } catch (e) {
+    alert("Не удалось скачать фото: " + e.message);
+  } finally {
+    if (btn) btn.textContent = oldText;
+  }
+}
+
+async function shareAllPhotos(urls, btn) {
+  const oldText = btn ? btn.textContent : "";
+  try {
+    if (btn) btn.textContent = "…";
+    const files = [];
+    for (let i = 0; i < urls.length; i++) {
+      files.push(await fetchAsFile(urls[i], `ttn-${Date.now()}-${i + 1}.jpg`));
+    }
+    if (navigator.canShare && navigator.canShare({ files })) {
+      await navigator.share({ files });
+    } else if (navigator.share) {
+      await navigator.share({ url: urls[0] });
+    } else {
+      urls.forEach((u) => window.open(u, "_blank"));
+    }
+  } catch (e) {
+    if (e.name !== "AbortError") alert("Не удалось отправить фото: " + e.message);
+  } finally {
+    if (btn) btn.textContent = oldText;
+  }
+}
+
 function openLightbox(urls) {
   const list = Array.isArray(urls) ? urls : [urls];
   let idx = 0;
@@ -432,13 +478,28 @@ function openLightbox(urls) {
   }
 
   // нижняя панель — скачать / отправить
-  const toolbar = el("div", "flex gap-3 pt-4 shrink-0");
-  const dlBtn = el("button", "px-4 py-2.5 rounded-full bg-white/15 text-white text-sm font-semibold flex items-center gap-1.5", "⬇️ Скачать");
+  const toolbar = el("div", "flex flex-col items-center gap-2 pt-4 shrink-0");
+
+  const row1 = el("div", "flex gap-3");
+  const dlBtn = el("button", "px-4 py-2.5 rounded-full bg-white/15 text-white text-sm font-semibold flex items-center gap-1.5", list.length > 1 ? "⬇️ Это фото" : "⬇️ Скачать");
   dlBtn.onclick = (e) => { e.stopPropagation(); downloadPhoto(list[idx], dlBtn); };
-  const shareBtn = el("button", "px-4 py-2.5 rounded-full bg-white/15 text-white text-sm font-semibold flex items-center gap-1.5", "📤 Отправить");
+  const shareBtn = el("button", "px-4 py-2.5 rounded-full bg-white/15 text-white text-sm font-semibold flex items-center gap-1.5", list.length > 1 ? "📤 Это фото" : "📤 Отправить");
   shareBtn.onclick = (e) => { e.stopPropagation(); sharePhoto(list[idx], shareBtn); };
-  toolbar.appendChild(dlBtn);
-  toolbar.appendChild(shareBtn);
+  row1.appendChild(dlBtn);
+  row1.appendChild(shareBtn);
+  toolbar.appendChild(row1);
+
+  if (list.length > 1) {
+    const row2 = el("div", "flex gap-3");
+    const dlAllBtn = el("button", "px-4 py-2.5 rounded-full bg-emerald-600 text-white text-sm font-semibold flex items-center gap-1.5", `⬇️ Все (${list.length})`);
+    dlAllBtn.onclick = (e) => { e.stopPropagation(); downloadAllPhotos(list, dlAllBtn); };
+    const shareAllBtn = el("button", "px-4 py-2.5 rounded-full bg-emerald-600 text-white text-sm font-semibold flex items-center gap-1.5", `📤 Все (${list.length})`);
+    shareAllBtn.onclick = (e) => { e.stopPropagation(); shareAllPhotos(list, shareAllBtn); };
+    row2.appendChild(dlAllBtn);
+    row2.appendChild(shareAllBtn);
+    toolbar.appendChild(row2);
+  }
+
   overlay.appendChild(toolbar);
 
   document.body.appendChild(overlay);
