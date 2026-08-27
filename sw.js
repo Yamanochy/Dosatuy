@@ -50,8 +50,8 @@ try {
 
   const messaging = firebase.messaging();
   messaging.onBackgroundMessage(async (payload) => {
-    const title = payload.notification?.title || "Вахта 45×45";
-    const body = payload.notification?.body || "";
+    const title = payload.data?.title || "Вахта 45×45";
+    const body = payload.data?.body || "";
     self.registration.showNotification(title, {
       body,
       icon: "icon-192.png",
@@ -83,7 +83,7 @@ self.addEventListener("notificationclick", (e) => {
   );
 });
 
-const VERSION = "vahta-v16";
+const VERSION = "vahta-v18";
 const ASSETS = [
   "./",
   "./index.html",

@@ -74,7 +74,7 @@ async function enablePushNotifications(silent = false) {
 if (messaging) {
   messaging.onMessage((payload) => {
     // приложение открыто на экране — показываем баннер внутри приложения
-    showInAppBanner(payload.notification?.title, payload.notification?.body);
+    showInAppBanner(payload.data?.title, payload.data?.body);
   });
 }
 

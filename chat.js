@@ -229,9 +229,13 @@ function renderChatInputBar() {
     textarea.style.height = Math.min(textarea.scrollHeight, 96) + "px";
   });
 
+  let isSending = false; // защита от двойной отправки (Android иногда шлёт Enter дважды)
+
   async function send() {
+    if (isSending) return;
     const text = textarea.value.trim();
     if (!text && !chatPendingImage) return;
+    isSending = true;
     textarea.value = "";
     textarea.style.height = "auto";
     sendBtn.disabled = true;
@@ -255,6 +259,7 @@ function renderChatInputBar() {
     } catch (e) {
       alert("Не удалось отправить: " + e.message);
     }
+    isSending = false;
     sendBtn.disabled = false;
     sendBtn.textContent = "➤";
     textarea.focus();
