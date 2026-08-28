@@ -83,7 +83,7 @@ self.addEventListener("notificationclick", (e) => {
   );
 });
 
-const VERSION = "vahta-v24";
+const VERSION = "vahta-v25";
 const ASSETS = [
   "./",
   "./index.html",
@@ -121,18 +121,18 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
+  // сначала пробуем сеть (всегда самая свежая версия), и только если
+  // сети совсем нет — отдаём то, что сохранено (офлайн-режим).
+  // Раньше было наоборот, из-за чего обновления подтягивались через раз.
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      const network = fetch(e.request)
-        .then((resp) => {
-          if (resp && resp.ok && e.request.url.startsWith(self.location.origin)) {
-            const clone = resp.clone();
-            caches.open(VERSION).then((cache) => cache.put(e.request, clone));
-          }
-          return resp;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+    fetch(e.request)
+      .then((resp) => {
+        if (resp && resp.ok && e.request.url.startsWith(self.location.origin)) {
+          const clone = resp.clone();
+          caches.open(VERSION).then((cache) => cache.put(e.request, clone));
+        }
+        return resp;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
