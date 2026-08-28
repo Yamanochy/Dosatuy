@@ -83,13 +83,14 @@ self.addEventListener("notificationclick", (e) => {
   );
 });
 
-const VERSION = "vahta-v18";
+const VERSION = "vahta-v20";
 const ASSETS = [
   "./",
   "./index.html",
   "./data.js",
   "./app.js",
   "./docs.js",
+  "./timesheet.js",
   "./chat.js",
   "./notifications.js",
   "./auth.js",

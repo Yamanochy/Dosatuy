@@ -90,8 +90,10 @@ function isWeekend(d) {
 }
 
 // ---------- логика вахты ----------
+function driverVahta(driver) { return driver.vahta || STATE.vahta || 45; }
+function driverOtdyh(driver) { return driver.otdyh || STATE.otdyh || 45; }
 function cyclePos(driver, date) {
-  const V = STATE.vahta, R = STATE.otdyh;
+  const V = driverVahta(driver), R = driverOtdyh(driver);
   const start = parseISO(driver.start);
   const diff = daysBetween(start, date);
   const cycle = V + R;
@@ -99,11 +101,11 @@ function cyclePos(driver, date) {
 }
 function driverStatus(driver, date) {
   const pos = cyclePos(driver, date);
-  return pos < STATE.vahta ? "vahta" : "otdyh";
+  return pos < driverVahta(driver) ? "vahta" : "otdyh";
 }
 function daysLeftInStage(driver, date) {
   const pos = cyclePos(driver, date);
-  const V = STATE.vahta, R = STATE.otdyh;
+  const V = driverVahta(driver), R = driverOtdyh(driver);
   return pos < V ? V - pos : V + R - pos;
 }
 function stageEndDate(driver, date) {
@@ -141,7 +143,7 @@ function render() {
   const today = toDateOnly(new Date());
   if (currentTab !== "chat") removeChatInputBar();
   if (currentTab === "dashboard") renderDashboard(today);
-  else if (currentTab === "overview") renderOverview(today);
+  else if (currentTab === "timesheet") renderTimesheet();
   else if (currentTab === "calendar") renderCalendar(today);
   else if (currentTab === "documents") renderDocuments();
   else if (currentTab === "chat") renderChat();
@@ -232,80 +234,11 @@ function renderDashboard(today) {
   app.appendChild(wrap);
 }
 
-// ---------- ОБЗОР ПО МЕСЯЦАМ ----------
+// ---------- вспомогательное (используется в Табеле) ----------
 function monthEnd(y, m) {
   return new Date(y, m + 1, 0).getDate();
 }
 const MONTHS_RU = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
-
-function buildPeriods(startDate, count) {
-  const periods = [];
-  let y = startDate.getFullYear(), m = startDate.getMonth();
-  for (let i = 0; i < count; i++) {
-    periods.push({ label: `${MONTHS_RU[m]}`, half: "1–15", date: new Date(y, m, 1) });
-    periods.push({ label: `${MONTHS_RU[m]}`, half: `15–${monthEnd(y, m)}`, date: new Date(y, m, 15) });
-    m++;
-    if (m === 12) { m = 0; y++; }
-  }
-  return periods;
-}
-
-function renderOverview(today) {
-  app.innerHTML = "";
-  const startMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-  const periods = buildPeriods(startMonth, 12);
-
-  const wrap = el("div", "bg-white rounded-2xl shadow-sm p-3 overflow-x-auto");
-  const table = el("table", "text-xs border-collapse w-full");
-
-  // month header row
-  const monthRow = el("tr");
-  monthRow.appendChild(el("th", "sticky left-0 bg-white z-10 text-left px-2 py-1 min-w-[130px]", "Водитель"));
-  let i = 0;
-  while (i < periods.length) {
-    const label = periods[i].label;
-    let span = 1;
-    if (periods[i + 1] && periods[i + 1].label === label) span = 2;
-    const th = el("th", "px-1 py-1 text-center font-bold text-slate-600 bg-slate-100", label);
-    th.colSpan = span;
-    monthRow.appendChild(th);
-    i += span;
-  }
-  table.appendChild(monthRow);
-
-  // half-period row
-  const halfRow = el("tr");
-  halfRow.appendChild(el("th", "sticky left-0 bg-white z-10"));
-  periods.forEach(p => {
-    halfRow.appendChild(el("th", "px-1 py-1 text-center text-slate-400 font-normal bg-slate-50 min-w-[34px]", p.half));
-  });
-  table.appendChild(halfRow);
-
-  STATE.drivers.forEach(driver => {
-    const tr = el("tr", "border-t border-slate-100");
-    const nameCell = el("td", "sticky left-0 bg-white px-2 py-1.5 font-medium text-slate-700 whitespace-nowrap");
-    nameCell.innerHTML = `<span class="inline-block w-2 h-2 rounded-full mr-1 ${driver.role === "Основной" ? "bg-emerald-500" : "bg-sky-500"}"></span>${driver.name}<div class="text-[10px] text-slate-400">${driver.truck}</div>`;
-    tr.appendChild(nameCell);
-    periods.forEach(p => {
-      const status = driverStatus(driver, p.date);
-      const cell = el("td", "text-center py-1.5");
-      if (status === "vahta") {
-        cell.innerHTML = `<span class="inline-block w-3.5 h-3.5 rounded-sm ${driver.role === "Основной" ? "bg-emerald-500" : "bg-sky-500"}"></span>`;
-      }
-      tr.appendChild(cell);
-    });
-    table.appendChild(tr);
-  });
-
-  wrap.appendChild(table);
-  app.appendChild(wrap);
-
-  const legend = el("div", "flex items-center gap-4 text-xs text-slate-500 mt-3 px-1");
-  legend.innerHTML = `<span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-emerald-500 inline-block"></span>основной на вахте</span>
-    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-sky-500 inline-block"></span>напарник на вахте</span>
-    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm border border-slate-300 inline-block"></span>дома</span>`;
-  app.appendChild(legend);
-}
 
 // ---------- КАЛЕНДАРЬ ПО ДНЯМ ----------
 let calendarDaysShown = 60;
@@ -369,28 +302,24 @@ function renderSettings() {
   app.innerHTML = "";
   const wrap = el("div", "space-y-4");
 
-  const paramCard = el("div", "bg-white rounded-2xl shadow-sm p-4");
-  paramCard.innerHTML = `<div class="font-bold text-slate-700 mb-3">Параметры вахты</div>`;
-  const paramGrid = el("div", "grid grid-cols-2 gap-3");
-  paramGrid.innerHTML = `
-    <label class="text-sm text-slate-500">Вахта, дней
-      <input id="inp-vahta" type="number" min="1" value="${STATE.vahta}" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-slate-800" />
-    </label>
-    <label class="text-sm text-slate-500">Отдых, дней
-      <input id="inp-otdyh" type="number" min="1" value="${STATE.otdyh}" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-slate-800" />
-    </label>`;
-  paramCard.appendChild(paramGrid);
-  wrap.appendChild(paramCard);
-
   const driversCard = el("div", "bg-white rounded-2xl shadow-sm p-4");
-  driversCard.innerHTML = `<div class="font-bold text-slate-700 mb-3">Водители и даты начала вахты</div>`;
+  driversCard.innerHTML = `<div class="font-bold text-slate-700 mb-1">Водители</div>
+    <div class="text-xs text-slate-400 mb-3">У каждого можно задать свою длину вахты и отдыха — если кто-то работает дольше 45 дней.</div>`;
   STATE.drivers.forEach(driver => {
     const row = el("div", "border-t border-slate-100 py-3 first:border-t-0 first:pt-0");
     row.innerHTML = `
       <div class="text-xs text-slate-400 mb-1">${driver.truck} · экипаж ${driver.crew} · ${driver.role}</div>
-      <div class="flex gap-2">
+      <div class="flex gap-2 mb-2">
         <input data-id="${driver.id}" data-field="name" value="${driver.name}" class="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-800" />
         <input data-id="${driver.id}" data-field="start" type="date" value="${driver.start}" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-800" />
+      </div>
+      <div class="flex gap-2 items-center">
+        <label class="text-xs text-slate-400 flex items-center gap-1">Вахта
+          <input data-id="${driver.id}" data-field="vahta" type="number" min="1" value="${driverVahta(driver)}" class="w-16 border border-slate-200 rounded-lg px-2 py-1 text-sm text-slate-800" /> дн.
+        </label>
+        <label class="text-xs text-slate-400 flex items-center gap-1">Отдых
+          <input data-id="${driver.id}" data-field="otdyh" type="number" min="1" value="${driverOtdyh(driver)}" class="w-16 border border-slate-200 rounded-lg px-2 py-1 text-sm text-slate-800" /> дн.
+        </label>
       </div>`;
     driversCard.appendChild(row);
   });
@@ -408,12 +337,16 @@ function renderSettings() {
   wrap.appendChild(toast);
 
   saveBtn.onclick = () => {
-    STATE.vahta = parseInt(document.getElementById("inp-vahta").value, 10) || STATE.vahta;
-    STATE.otdyh = parseInt(document.getElementById("inp-otdyh").value, 10) || STATE.otdyh;
     document.querySelectorAll("[data-field]").forEach(inp => {
       const id = parseInt(inp.dataset.id, 10);
       const driver = STATE.drivers.find(d => d.id === id);
-      if (driver) driver[inp.dataset.field] = inp.value;
+      if (!driver) return;
+      const field = inp.dataset.field;
+      if (field === "vahta" || field === "otdyh") {
+        driver[field] = parseInt(inp.value, 10) || 45;
+      } else {
+        driver[field] = inp.value;
+      }
     });
     saveSettings(STATE); // локальный кэш — мгновенно
     saveBtn.disabled = true;
@@ -488,6 +421,7 @@ function wireNav() {
       currentTab = btn.dataset.tab;
       calendarDaysShown = 60;
       addFormOpen = false;
+      if (typeof maintFormOpen !== "undefined") maintFormOpen = false;
       render();
       window.scrollTo(0, 0);
     };
@@ -502,6 +436,8 @@ function startApp() {
   render();
   subscribeCloudSettings();
   if (typeof subscribeChat === "function") subscribeChat();
+  if (typeof subscribeDocs === "function") subscribeDocs();
+  if (typeof subscribeMaintenance === "function") subscribeMaintenance();
   if (typeof clearUnreadBadge === "function") clearUnreadBadge();
 
   if ("serviceWorker" in navigator) {
@@ -525,7 +461,7 @@ function buildNav() {
   const isManager = currentProfile.role === "manager";
   nav.innerHTML = `
     <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="dashboard"><span class="tabicon text-xl transition-transform">🏠</span>Дашборд</button>
-    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="overview"><span class="tabicon text-xl transition-transform">🗓️</span>Обзор</button>
+    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="timesheet"><span class="tabicon text-xl transition-transform">🧾</span>Табель</button>
     <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="calendar"><span class="tabicon text-xl transition-transform">📆</span>По дням</button>
     <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="documents"><span class="tabicon text-xl transition-transform">📄</span>ТТН</button>
     <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="chat"><span class="tabicon text-xl transition-transform">💬</span>Чат</button>

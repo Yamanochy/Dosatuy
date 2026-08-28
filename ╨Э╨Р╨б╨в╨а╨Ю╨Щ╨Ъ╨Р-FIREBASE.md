@@ -26,8 +26,17 @@ Cloudinary (хранение фото). Карта нигде не нужна.
        }
        match /ttnDocs/{docId} {
          allow read, create: if request.auth != null;
-         allow update, delete: if request.auth != null
-           && request.auth.uid == resource.data.uploadedByUid;
+         allow update, delete: if request.auth != null && (
+           request.auth.uid == resource.data.uploadedByUid ||
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'manager'
+         );
+       }
+       match /maintenanceDocs/{docId} {
+         allow read, create: if request.auth != null;
+         allow update, delete: if request.auth != null && (
+           request.auth.uid == resource.data.uploadedByUid ||
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'manager'
+         );
        }
        match /chatMessages/{msgId} {
          allow read, create: if request.auth != null;
