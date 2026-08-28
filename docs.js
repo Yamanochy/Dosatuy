@@ -203,7 +203,7 @@ function renderTtnSection(wrap) {
       <div class="text-slate-500 text-xs">${doc.ttnDate ? fmtRU(parseISO(doc.ttnDate)) : ""}</div>
       <div class="text-slate-600 text-xs mt-1">🚛 ${escapeHtml(doc.truck || "—")}</div>
       <div class="text-slate-600 text-xs">👤 ${escapeHtml(doc.driverName || "—")}</div>
-      <div class="text-slate-600 text-xs">⚖️ ${doc.weight ? doc.weight + " кг" : "—"}</div>
+      <div class="text-slate-600 text-xs">⚖️ ${doc.weight ? doc.weight + " т" : "—"}</div>
       <div class="text-emerald-600 text-xs font-semibold">💰 6 000 ₽</div>
       <div class="text-slate-300 text-[10px] mt-1">добавил(а): ${escapeHtml(doc.uploadedByName || "")}</div>`;
     card.appendChild(info);
@@ -240,8 +240,8 @@ function renderAddForm() {
       <select id="df-driver-select" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white"></select>
       <input id="df-driver-other" placeholder="Впиши ФИО" class="mt-2 hidden w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm" />
     </label>
-    <label class="block text-xs text-slate-500">Вес груза, кг
-      <input id="df-weight" type="number" min="0" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm" placeholder="напр. 18500" />
+    <label class="block text-xs text-slate-500">Вес груза, т
+      <input id="df-weight" type="number" min="0" step="0.01" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm" placeholder="напр. 34.56" />
     </label>
     <div class="text-xs text-slate-400">1 ТТН = 1 смена = 6 000 ₽. Если за день два рейса — просто добавь вторую запись тем же числом.</div>
     <div>

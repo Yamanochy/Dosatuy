@@ -37,7 +37,8 @@ function renderStatistics() {
 
   const statsRow = el("div", "grid grid-cols-2 gap-2");
   statsRow.appendChild(statCard("рейсов", totalTrips, "🚛"));
-  statsRow.appendChild(statCard("вес груза", (totalWeight / 1000).toFixed(1) + " т", "⚖️"));
+  const weightLabel = totalWeight.toLocaleString("ru-RU", { maximumFractionDigits: 2 }) + " т";
+  statsRow.appendChild(statCard("вес груза", weightLabel, "⚖️"));
   wrap.appendChild(statsRow);
 
   const trendCard = el("div", "bg-white rounded-2xl shadow-sm p-4");
