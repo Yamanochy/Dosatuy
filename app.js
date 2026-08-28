@@ -144,7 +144,7 @@ function render() {
   if (currentTab !== "chat") removeChatInputBar();
   if (currentTab === "dashboard") renderDashboard(today);
   else if (currentTab === "timesheet") renderTimesheet();
-  else if (currentTab === "calendar") renderCalendar(today);
+  else if (currentTab === "stats") renderStatistics();
   else if (currentTab === "documents") renderDocuments();
   else if (currentTab === "chat") renderChat();
   else if (currentTab === "settings" && currentProfile.role === "manager") renderSettings();
@@ -162,9 +162,47 @@ function el(tag, cls, html) {
 }
 
 // ---------- ДАШБОРД ----------
+// собирает предупреждения для Дашборда: активные водители без свежих ТТН
+// (видно только руководителю) и грузовики с давним/отсутствующим ТО (видно всем)
+function computeDashboardWarnings(today) {
+  const warnings = [];
+  const docs = (typeof docsCache !== "undefined") ? docsCache : [];
+  const maint = (typeof maintenanceCache !== "undefined") ? maintenanceCache : [];
+
+  if (currentProfile?.role === "manager") {
+    const cutoff = addDays(today, -2);
+    STATE.drivers
+      .filter(d => driverStatus(d, today) === "vahta")
+      .forEach(d => {
+        const hasRecent = docs.some(doc =>
+          doc.driverName === d.name && doc.ttnDate && parseISO(doc.ttnDate) >= cutoff);
+        if (!hasRecent) warnings.push(`${d.name} на вахте, но ТТН от него нет уже 2+ дня`);
+      });
+  }
+
+  STATE.trucks.forEach(truck => {
+    const toEntries = maint.filter(m => m.truck === truck && m.type === "ТО" && m.date);
+    if (!toEntries.length) return; // ни разу не фиксировали — не пугаем сразу
+    const lastTO = toEntries.map(m => parseISO(m.date)).sort((a, b) => b - a)[0];
+    const daysSince = daysBetween(lastTO, today);
+    if (daysSince > 45) warnings.push(`${truck}: последнее ТО было ${daysSince} дн. назад`);
+  });
+
+  return warnings;
+}
+
 function renderDashboard(today) {
   app.innerHTML = "";
   const wrap = el("div", "space-y-4");
+
+  const warnings = computeDashboardWarnings(today);
+  if (warnings.length) {
+    const warnCard = el("div", "bg-amber-50 border border-amber-200 rounded-2xl p-3 space-y-1.5");
+    const title = el("div", "font-bold text-amber-700 text-sm flex items-center gap-1.5", "⚠️ Обрати внимание");
+    warnCard.appendChild(title);
+    warnings.forEach(w => warnCard.appendChild(el("div", "text-xs text-amber-700", "• " + escapeHtml(w))));
+    wrap.appendChild(warnCard);
+  }
 
   const dateCard = el("div", "bg-white rounded-2xl shadow-sm p-4 flex items-center justify-between");
   dateCard.innerHTML = `
@@ -241,62 +279,6 @@ function monthEnd(y, m) {
 const MONTHS_RU = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 
 // ---------- КАЛЕНДАРЬ ПО ДНЯМ ----------
-let calendarDaysShown = 60;
-
-function renderCalendar(today) {
-  app.innerHTML = "";
-  const wrap = el("div", "space-y-2");
-
-  const startDate = addDays(today, -3);
-  for (let i = 0; i < calendarDaysShown; i++) {
-    const d = addDays(startDate, i);
-    const isToday = daysBetween(d, today) === 0;
-    const weekend = isWeekend(d);
-
-    const rows = STATE.trucks.map(truck => {
-      const names = activeNamesForTruck(truck, d);
-      return { truck, names: names.join(" + ") };
-    });
-
-    // определяем день пересменки (сравнение состава на вахте с предыдущим днём)
-    let switchInfo = null;
-    if (i > 0) {
-      const prevD = addDays(d, -1);
-      STATE.trucks.forEach(truck => {
-        const a = activeNamesForTruck(truck, d).sort().join(",");
-        const b = activeNamesForTruck(truck, prevD).sort().join(",");
-        if (a !== b) switchInfo = truck;
-      });
-    }
-
-    const row = el("div", `rounded-xl px-3 py-2 flex items-center gap-3 ${
-      isToday ? "bg-amber-100 ring-2 ring-amber-300" : weekend ? "bg-slate-100" : "bg-white"
-    } shadow-sm`);
-
-    const dateCol = el("div", "w-16 shrink-0");
-    dateCol.innerHTML = `<div class="font-bold text-slate-700 text-sm">${d.getDate()}.${String(d.getMonth()+1).padStart(2,"0")}</div><div class="text-[11px] text-slate-400">${weekdayShort(d)}</div>`;
-    row.appendChild(dateCol);
-
-    const infoCol = el("div", "flex-1 text-xs space-y-0.5");
-    infoCol.innerHTML = rows.map(r => `<div><span class="font-semibold text-slate-500">${r.truck.replace("Шакман ","")}</span> <span class="text-slate-700">${r.names || "— никого нет на вахте —"}</span></div>`).join("");
-    row.appendChild(infoCol);
-
-    if (switchInfo) {
-      row.appendChild(el("div", "text-lg", "🔄"));
-    } else if (isToday) {
-      row.appendChild(el("div", "text-xs font-bold text-amber-600 shrink-0", "СЕГОДНЯ"));
-    }
-
-    wrap.appendChild(row);
-  }
-
-  const moreBtn = el("button", "w-full py-3 rounded-xl bg-white shadow-sm text-slate-500 text-sm font-medium", "Показать ещё дни ↓");
-  moreBtn.onclick = () => { calendarDaysShown += 60; render(); };
-  wrap.appendChild(moreBtn);
-
-  app.appendChild(wrap);
-}
-
 // ---------- НАСТРОЙКИ ----------
 function renderSettings() {
   app.innerHTML = "";
@@ -419,7 +401,6 @@ function wireNav() {
   document.querySelectorAll(".tabbtn").forEach(btn => {
     btn.onclick = () => {
       currentTab = btn.dataset.tab;
-      calendarDaysShown = 60;
       addFormOpen = false;
       if (typeof maintFormOpen !== "undefined") maintFormOpen = false;
       render();
@@ -462,7 +443,7 @@ function buildNav() {
   nav.innerHTML = `
     <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="dashboard"><span class="tabicon text-xl transition-transform">🏠</span>Дашборд</button>
     <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="timesheet"><span class="tabicon text-xl transition-transform">🧾</span>Табель</button>
-    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="calendar"><span class="tabicon text-xl transition-transform">📆</span>По дням</button>
+    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="stats"><span class="tabicon text-xl transition-transform">📊</span>Статистика</button>
     <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="documents"><span class="tabicon text-xl transition-transform">📄</span>ТТН</button>
     <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="chat"><span class="tabicon text-xl transition-transform">💬</span>Чат</button>
     ${isManager ? `<button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="settings"><span class="tabicon text-xl transition-transform">⚙️</span>Настройки</button>` : ""}`;

@@ -73,6 +73,12 @@ function renderTimesheet() {
     ? names
     : names.filter((n) => n.toLowerCase() === (currentProfile?.name || "").toLowerCase());
 
+  if (visibleNames.length) {
+    const exportBtn = el("button", "w-full py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-semibold flex items-center justify-center gap-2", "⬇️ Скачать табель (Excel)");
+    exportBtn.onclick = () => exportTimesheetToExcel(perDriver, visibleNames, year, month);
+    wrap.appendChild(exportBtn);
+  }
+
   if (!visibleNames.length) {
     wrap.appendChild(el("div", "text-center text-slate-400 text-sm py-8",
       "За этот месяц пока нет записей — смены появятся здесь автоматически после добавления ТТН."));
@@ -122,4 +128,41 @@ function renderTimesheet() {
   });
 
   app.appendChild(wrap);
+}
+
+// ---------- экспорт табеля в Excel ----------
+function exportTimesheetToExcel(perDriver, visibleNames, year, month) {
+  if (typeof XLSX === "undefined") {
+    alert("Не удалось загрузить модуль Excel — проверь подключение к интернету и попробуй ещё раз.");
+    return;
+  }
+  const summaryRows = [["ФИО", "Смен", "Оплата за смены, ₽", "ТО/ремонт", "Оплата за ТО/ремонт, ₽", "Итого, ₽"]];
+  visibleNames.forEach((name) => {
+    const r = perDriver[name];
+    summaryRows.push([name, r.shifts.length, r.shiftPay, r.maint.length, r.maintPay, r.shiftPay + r.maintPay]);
+  });
+
+  const detailHeader = ["Дата", "ФИО", "Тип", "Номер / машина", "Сумма, ₽"];
+  const detailRows = [];
+  visibleNames.forEach((name) => {
+    const r = perDriver[name];
+    r.shifts.forEach((d) => {
+      detailRows.push([d.ttnDate, name, "Смена", `ТТН № ${d.ttnNumber} · ${d.truck || ""}`, 6000]);
+    });
+    r.maint.forEach((m) => {
+      const workers = [m.primaryWorker, m.secondaryWorker].filter(Boolean);
+      const share = workers.length === 2 ? 3000 : 6000;
+      detailRows.push([m.date, name, m.type || "ТО/ремонт", m.truck || "", share]);
+    });
+  });
+  detailRows.sort((a, b) => (a[0] || "").localeCompare(b[0] || ""));
+  detailRows.unshift(detailHeader);
+
+  const wb = XLSX.utils.book_new();
+  const ws1 = XLSX.utils.aoa_to_sheet(summaryRows);
+  XLSX.utils.book_append_sheet(wb, ws1, "Табель");
+  const ws2 = XLSX.utils.aoa_to_sheet(detailRows);
+  XLSX.utils.book_append_sheet(wb, ws2, "Детализация");
+
+  XLSX.writeFile(wb, `Табель_Досатуй_${MONTHS_RU[month]}_${year}.xlsx`);
 }
