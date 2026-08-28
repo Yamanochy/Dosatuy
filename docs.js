@@ -263,7 +263,7 @@ function renderAddForm() {
       <button id="df-cancel" class="px-4 py-2.5 rounded-lg bg-slate-100 text-slate-500 font-semibold text-sm">Отмена</button>
     </div>`;
 
-  const driverNames = [...new Set(STATE.drivers.map((d) => d.name))];
+  const driverNames = [...new Set(STATE.drivers.map((d) => d.name).filter(Boolean))];
   const driverSelect = card.querySelector("#df-driver-select");
   const otherInput = card.querySelector("#df-driver-other");
   driverSelect.innerHTML =
@@ -470,7 +470,7 @@ function renderMaintenanceSection(wrap) {
 
 function renderMaintenanceAddForm() {
   const card = el("div", "bg-white rounded-2xl shadow-sm p-4 space-y-3");
-  const driverNames = [...new Set(STATE.drivers.map((d) => d.name))];
+  const driverNames = [...new Set(STATE.drivers.map((d) => d.name).filter(Boolean))];
   card.innerHTML = `
     <div class="font-bold text-slate-700">Новая запись — ТО / ремонт</div>
     <label class="block text-xs text-slate-500">Дата

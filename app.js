@@ -138,6 +138,7 @@ function activeNamesForTruck(truck, date) {
 // ============================================================
 const app = document.getElementById("app");
 let currentTab = "dashboard";
+let tempTrucks = null; // черновик списка машин при редактировании в Настройках
 
 function render() {
   const today = toDateOnly(new Date());
@@ -284,16 +285,65 @@ function renderSettings() {
   app.innerHTML = "";
   const wrap = el("div", "space-y-4");
 
+  if (tempTrucks === null) tempTrucks = STATE.trucks.slice();
+
+  function captureTruckInputs() {
+    const inputs = document.querySelectorAll("[data-truck-idx]");
+    if (!inputs.length) return tempTrucks.slice();
+    const vals = [];
+    inputs.forEach(inp => { vals[parseInt(inp.dataset.truckIdx, 10)] = inp.value; });
+    return vals;
+  }
+
+  const trucksCard = el("div", "bg-white rounded-2xl shadow-sm p-4");
+  trucksCard.innerHTML = `<div class="font-bold text-slate-700 mb-1">Машины</div>
+    <div class="text-xs text-slate-400 mb-3">Список грузовиков, которые водители видят при выборе в ТТН и ТО/ремонте.</div>`;
+  tempTrucks.forEach((truck, idx) => {
+    const row = el("div", "flex gap-2 items-center mb-2");
+    const input = el("input", "flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-800");
+    input.value = truck;
+    input.dataset.truckIdx = idx;
+    row.appendChild(input);
+    const delBtn = el("button", "text-slate-300 hover:text-rose-500 shrink-0 px-1 text-lg", "✕");
+    delBtn.onclick = () => {
+      tempTrucks = captureTruckInputs();
+      tempTrucks.splice(idx, 1);
+      render();
+    };
+    row.appendChild(delBtn);
+    trucksCard.appendChild(row);
+  });
+  const addTruckBtn = el("button", "text-sm text-slate-600 font-semibold mt-1", "➕ Добавить машину");
+  addTruckBtn.onclick = () => {
+    tempTrucks = captureTruckInputs();
+    tempTrucks.push("");
+    render();
+  };
+  trucksCard.appendChild(addTruckBtn);
+  wrap.appendChild(trucksCard);
+
   const driversCard = el("div", "bg-white rounded-2xl shadow-sm p-4");
   driversCard.innerHTML = `<div class="font-bold text-slate-700 mb-1">Водители</div>
     <div class="text-xs text-slate-400 mb-3">У каждого можно задать свою длину вахты и отдыха — если кто-то работает дольше 45 дней.</div>`;
   STATE.drivers.forEach(driver => {
     const row = el("div", "border-t border-slate-100 py-3 first:border-t-0 first:pt-0");
     row.innerHTML = `
-      <div class="text-xs text-slate-400 mb-1">${driver.truck} · экипаж ${driver.crew} · ${driver.role}</div>
+      <div class="flex items-center justify-between mb-2">
+        <input data-id="${driver.id}" data-field="name" value="${driver.name}" placeholder="ФИО водителя" class="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-800 font-medium" />
+        <button data-del-driver="${driver.id}" class="text-slate-300 hover:text-rose-500 shrink-0 px-2 text-lg">✕</button>
+      </div>
       <div class="flex gap-2 mb-2">
-        <input data-id="${driver.id}" data-field="name" value="${driver.name}" class="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-800" />
-        <input data-id="${driver.id}" data-field="start" type="date" value="${driver.start}" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-800" />
+        <select data-id="${driver.id}" data-field="truck" class="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-800 bg-white">
+          ${STATE.trucks.map(t => `<option value="${t}" ${t === driver.truck ? "selected" : ""}>${t}</option>`).join("")}
+        </select>
+        <select data-id="${driver.id}" data-field="role" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-800 bg-white">
+          <option value="Основной" ${driver.role === "Основной" ? "selected" : ""}>Основной</option>
+          <option value="Напарник" ${driver.role === "Напарник" ? "selected" : ""}>Напарник</option>
+        </select>
+      </div>
+      <div class="flex gap-2 mb-2">
+        <input data-id="${driver.id}" data-field="crew" value="${driver.crew || ""}" placeholder="Экипаж (напр. A)" class="w-28 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-800" />
+        <input data-id="${driver.id}" data-field="start" type="date" value="${driver.start}" class="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-800" />
       </div>
       <div class="flex gap-2 items-center">
         <label class="text-xs text-slate-400 flex items-center gap-1">Вахта
@@ -304,7 +354,34 @@ function renderSettings() {
         </label>
       </div>`;
     driversCard.appendChild(row);
+    row.querySelector("[data-del-driver]").onclick = () => {
+      if (confirm(`Удалить ${driver.name || "этого водителя"} из списка?`)) {
+        STATE.drivers = STATE.drivers.filter(d => d.id !== driver.id);
+        render();
+      }
+    };
   });
+
+  const addDriverBtn = el("button", "text-sm text-slate-600 font-semibold mt-1", "➕ Добавить водителя");
+  addDriverBtn.onclick = () => {
+    STATE.drivers.push({
+      id: Date.now(),
+      name: "",
+      truck: STATE.trucks[0] || "",
+      crew: "",
+      role: "Основной",
+      start: fmtISO(new Date()),
+      vahta: 45,
+      otdyh: 45,
+    });
+    render();
+    setTimeout(() => {
+      const inputs = document.querySelectorAll('[data-field="name"]');
+      const last = inputs[inputs.length - 1];
+      if (last) last.focus();
+    }, 0);
+  };
+  driversCard.appendChild(addDriverBtn);
   wrap.appendChild(driversCard);
 
   const btnRow = el("div", "flex gap-3");
@@ -330,6 +407,14 @@ function renderSettings() {
         driver[field] = inp.value;
       }
     });
+    // пустые (без ФИО) записи не сохраняем — так добавленный, но не заполненный
+    // водитель не остаётся висеть в списке и не появляется в выборе для ТТН
+    STATE.drivers = STATE.drivers.filter(d => d.name && d.name.trim());
+    const cleanedTrucks = captureTruckInputs().map(t => t.trim()).filter(Boolean);
+    if (cleanedTrucks.length) {
+      STATE.trucks = cleanedTrucks;
+      tempTrucks = cleanedTrucks.slice();
+    }
     saveSettings(STATE); // локальный кэш — мгновенно
     saveBtn.disabled = true;
     saveBtn.textContent = "Сохраняю…";
@@ -348,6 +433,7 @@ function renderSettings() {
   resetBtn.onclick = () => {
     if (confirm("Сбросить все настройки к заводским значениям? Изменения увидят все устройства.")) {
       STATE = resetSettings();
+      tempTrucks = null;
       render();
       saveCloudSettings(STATE).catch((e) => alert("Не удалось сбросить в общей базе: " + e.message));
     }
@@ -403,6 +489,7 @@ function wireNav() {
       currentTab = btn.dataset.tab;
       addFormOpen = false;
       if (typeof maintFormOpen !== "undefined") maintFormOpen = false;
+      tempTrucks = null;
       render();
       window.scrollTo(0, 0);
     };

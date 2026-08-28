@@ -83,7 +83,7 @@ self.addEventListener("notificationclick", (e) => {
   );
 });
 
-const VERSION = "vahta-v25";
+const VERSION = "vahta-v27";
 const ASSETS = [
   "./",
   "./index.html",
