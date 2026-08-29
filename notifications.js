@@ -79,7 +79,7 @@ if (messaging) {
 }
 
 function showInAppBanner(title, body) {
-  const banner = el("div", "fixed top-3 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white rounded-2xl shadow-lg px-4 py-3 max-w-xs w-[90%]");
+  const banner = el("div", "fixed top-3 left-1/2 -translate-x-1/2 z-50 bg-diesel text-white rounded-xl shadow-lg px-4 py-3 max-w-xs w-[90%]");
   banner.innerHTML = `<div class="font-semibold text-sm">${escapeHtml(title || "Новое сообщение")}</div><div class="text-xs text-slate-300 mt-0.5">${escapeHtml(body || "")}</div>`;
   document.body.appendChild(banner);
   setTimeout(() => banner.remove(), 4000);

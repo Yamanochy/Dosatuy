@@ -10,7 +10,7 @@ function destroyStatsCharts() {
 }
 
 function statCard(label, value, icon) {
-  const c = el("div", "bg-white rounded-2xl shadow-sm p-3 text-center");
+  const c = el("div", "bg-white rounded-xl border border-slate-200 p-3 text-center");
   c.innerHTML = `<div class="text-xl">${icon}</div><div class="text-base font-bold text-slate-800 mt-1">${value}</div><div class="text-[10px] text-slate-400 mt-0.5">${label}</div>`;
   return c;
 }
@@ -41,11 +41,11 @@ function renderStatistics() {
   statsRow.appendChild(statCard("вес груза", weightLabel, "⚖️"));
   wrap.appendChild(statsRow);
 
-  const trendCard = el("div", "bg-white rounded-2xl shadow-sm p-4");
+  const trendCard = el("div", "bg-white rounded-xl border border-slate-200 p-4");
   trendCard.innerHTML = `<div class="font-bold text-slate-700 mb-2 text-sm">Рейсов по месяцам</div><div id="chart-trend-wrap"><canvas id="chart-trend" height="150"></canvas></div>`;
   wrap.appendChild(trendCard);
 
-  const truckCard = el("div", "bg-white rounded-2xl shadow-sm p-4");
+  const truckCard = el("div", "bg-white rounded-xl border border-slate-200 p-4");
   truckCard.innerHTML = `<div class="font-bold text-slate-700 mb-2 text-sm">Самосвалы в этом месяце</div><div id="chart-trucks-wrap"><canvas id="chart-trucks" height="120"></canvas></div>`;
   wrap.appendChild(truckCard);
 
@@ -54,7 +54,7 @@ function renderStatistics() {
       .map((r) => ({ name: r.name, trips: r.shifts.length, total: r.shiftPay + r.maintPay }))
       .sort((a, b) => b.trips - a.trips);
     if (entries.length) {
-      const topCard = el("div", "bg-white rounded-2xl shadow-sm p-4");
+      const topCard = el("div", "bg-white rounded-xl border border-slate-200 p-4");
       topCard.innerHTML = `<div class="font-bold text-slate-700 mb-2 text-sm">🏆 Топ за месяц</div>`;
       const list = el("div", "space-y-1.5");
       entries.slice(0, 6).forEach((e, i) => {

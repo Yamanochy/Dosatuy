@@ -66,11 +66,11 @@ function renderChat() {
 
   const wrap = el("div", "pb-24");
 
-  const header = el("div", "bg-white rounded-2xl shadow-sm px-4 py-3 mb-3 flex items-center gap-2 flex-wrap");
+  const header = el("div", "bg-white rounded-xl border border-slate-200 px-4 py-3 mb-3 flex items-center gap-2 flex-wrap");
   header.innerHTML = `<span class="text-xl">💬</span><span class="font-bold text-slate-700">Общий чат команды</span>`;
   const pushStatus = pushPermissionStatus();
   if (pushStatus === "default") {
-    const bellBtn = el("button", "ml-auto text-xs font-semibold bg-slate-800 text-white px-3 py-1.5 rounded-full flex items-center gap-1", "🔔 Включить уведомления");
+    const bellBtn = el("button", "ml-auto text-xs font-semibold bg-diesel text-white px-3 py-1.5 rounded-full flex items-center gap-1", "🔔 Включить уведомления");
     bellBtn.onclick = async () => {
       bellBtn.textContent = "…";
       const ok = await enablePushNotifications();
@@ -79,7 +79,7 @@ function renderChat() {
     };
     header.appendChild(bellBtn);
   } else if (pushStatus === "granted") {
-    header.appendChild(el("span", "ml-auto text-xs text-emerald-600 font-semibold", "🔔 включены"));
+    header.appendChild(el("span", "ml-auto text-xs text-shift font-semibold", "🔔 включены"));
     enablePushNotifications(true); // тихо обновляем подписку на случай, если она "отвалилась"
   } else if (pushStatus === "denied") {
     header.appendChild(el("span", "ml-auto text-xs text-slate-400", "🔕 запрещены в браузере"));
@@ -151,7 +151,7 @@ function renderChatMessages() {
       row.appendChild(delBtn);
     }
 
-    const bubble = el("div", `max-w-[70%] rounded-2xl px-3 py-2 ${isMine ? "bg-slate-800 text-white rounded-br-sm order-none" : "bg-white text-slate-800 rounded-bl-sm shadow-sm order-1"}`);
+    const bubble = el("div", `max-w-[70%] rounded-xl px-3 py-2 ${isMine ? "bg-diesel text-white rounded-br-sm order-none" : "bg-white text-slate-800 rounded-bl-sm shadow-sm order-1"}`);
     const roleTag = m.senderRole === "manager" ? " · рук." : "";
     let bodyHtml = "";
     if (!isMine) bodyHtml += `<div class="text-[11px] font-semibold text-slate-400 mb-0.5">${escapeHtml(m.senderName || "")}${roleTag}</div>`;
@@ -183,18 +183,18 @@ function renderChatInputBar() {
 
   const bar = el("div", "fixed left-0 right-0 bottom-[64px] px-3 pb-2 z-10");
   bar.id = "chat-input-bar";
-  const inner = el("div", "max-w-md mx-auto bg-white rounded-2xl shadow-lg p-2 border border-slate-100");
+  const inner = el("div", "max-w-md mx-auto bg-white rounded-xl shadow-lg p-2 border border-slate-100");
   inner.innerHTML = `
     <div id="chat-img-preview" class="hidden relative w-16 h-16 mb-2">
       <img class="w-16 h-16 object-cover rounded-lg" />
-      <button id="chat-img-remove" type="button" class="absolute -top-1.5 -right-1.5 bg-slate-800 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">✕</button>
+      <button id="chat-img-remove" type="button" class="absolute -top-1.5 -right-1.5 bg-diesel text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">✕</button>
     </div>
     <div class="flex items-end gap-2">
       <button id="chat-attach" type="button" class="shrink-0 text-slate-400 w-9 h-9 flex items-center justify-center text-xl">📎</button>
       <input id="chat-photo-input" type="file" accept="image/*" class="hidden" />
       <textarea id="chat-text" rows="1" placeholder="Написать сообщение…"
         class="flex-1 resize-none max-h-24 border-0 focus:ring-0 outline-none text-sm px-2 py-2"></textarea>
-      <button id="chat-send" class="shrink-0 bg-slate-800 text-white rounded-full w-10 h-10 flex items-center justify-center text-lg">➤</button>
+      <button id="chat-send" class="shrink-0 bg-diesel text-white rounded-full w-10 h-10 flex items-center justify-center text-lg">➤</button>
     </div>`;
   bar.appendChild(inner);
   document.body.appendChild(bar);

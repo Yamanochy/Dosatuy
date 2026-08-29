@@ -83,7 +83,7 @@ self.addEventListener("notificationclick", (e) => {
   );
 });
 
-const VERSION = "vahta-v28";
+const VERSION = "vahta-v30";
 const ASSETS = [
   "./",
   "./index.html",
@@ -101,9 +101,11 @@ const ASSETS = [
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
+  "./badge-krona.png",
   // внешние библиотеки с CDN — без них приложение не грузится офлайн,
   // раньше кэшировались только свои файлы
   "https://cdn.tailwindcss.com",
+  "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap",
   "https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js",
   "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js",
   "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js",

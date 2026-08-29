@@ -140,6 +140,16 @@ const app = document.getElementById("app");
 let currentTab = "dashboard";
 let tempTrucks = null; // черновик списка машин при редактировании в Настройках
 
+// строгие line-иконки нижней навигации (без эмодзи)
+const ICONS = {
+  dashboard: `<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>`,
+  timesheet: `<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h10a1 1 0 0 1 1 1v16l-2.5-1.5L13 20l-2.5-1.5L8 20l-2.5-1.5L3 20V6a3 3 0 0 1 3-3z"/><path d="M7.5 8h7M7.5 12h7M7.5 16h4"/></svg>`,
+  stats: `<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>`,
+  documents: `<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l5 5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20V3.5A1.5 1.5 0 0 1 6 2z"/><path d="M14 2v5h5M8 12h8M8 16h5"/></svg>`,
+  chat: `<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.7 8.7 0 0 1-4-1L3 20l1-5.5a8.38 8.38 0 0 1-1-4A8.38 8.38 0 0 1 11.5 2a8.5 8.5 0 0 1 9.5 9.5z"/></svg>`,
+  settings: `<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+};
+
 function render() {
   const today = toDateOnly(new Date());
   if (currentTab !== "chat") removeChatInputBar();
@@ -196,37 +206,40 @@ function computeDashboardWarnings(today) {
 
 function renderDashboard(today) {
   app.innerHTML = "";
-  const wrap = el("div", "space-y-4");
+  const wrap = el("div", "space-y-3");
 
   const warnings = computeDashboardWarnings(today);
   if (warnings.length) {
-    const warnCard = el("div", "bg-amber-50 border border-amber-200 rounded-2xl p-3 space-y-1.5");
-    const title = el("div", "font-bold text-amber-700 text-sm flex items-center gap-1.5", "⚠️ Обрати внимание");
+    const warnCard = el("div", "bg-white rounded-xl border border-brick/25 border-l-4 border-l-brick p-3 space-y-1.5");
+    const title = el("div", "font-bold text-brick text-sm flex items-center gap-1.5 font-display", "Обрати внимание");
     warnCard.appendChild(title);
-    warnings.forEach(w => warnCard.appendChild(el("div", "text-xs text-amber-700", "• " + escapeHtml(w))));
+    warnings.forEach(w => warnCard.appendChild(el("div", "text-xs text-slate-600", w)));
     wrap.appendChild(warnCard);
   }
 
-  const dateCard = el("div", "bg-white rounded-2xl shadow-sm p-4 flex items-center justify-between");
+  const dateCard = el("div", "bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between");
   dateCard.innerHTML = `
     <div>
-      <div class="text-xs uppercase tracking-wide text-slate-400 font-semibold">Сегодня</div>
-      <div class="text-xl font-bold text-slate-800">${fmtRU(today)}</div>
+      <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400 font-semibold font-num">Сегодня</div>
+      <div class="text-xl font-bold text-diesel font-display">${fmtRU(today)}</div>
       <div class="text-sm text-slate-400">${today.toLocaleDateString("ru-RU", { weekday: "long" })}</div>
     </div>
-    <div class="text-4xl">📅</div>`;
+    <div class="w-11 h-11 rounded-lg bg-diesel/5 flex items-center justify-center text-diesel">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg>
+    </div>`;
   wrap.appendChild(dateCard);
 
   STATE.trucks.forEach(truck => {
     const rows = truckDriverRows(truck, today);
     const onVahtaCount = rows.filter(r => r.status === "vahta").length;
 
-    const card = el("div", "bg-white rounded-2xl shadow-sm overflow-hidden");
-    const header = el("div", "bg-gradient-to-r from-slate-800 to-slate-700 text-white px-4 py-3 flex items-center gap-2");
+    const card = el("div", "bg-white rounded-xl border border-slate-200 overflow-hidden");
+    const header = el("div", "bg-diesel text-white px-4 py-2.5 flex items-center gap-2");
     header.innerHTML = `
-      <span class="text-2xl">🚛</span>
-      <span class="font-bold text-lg">${truck}</span>
-      <span class="ml-auto text-xs bg-white/15 px-2 py-1 rounded-full">${onVahtaCount} на вахте</span>`;
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 17h1M21 17h1M3 17V10a1 1 0 0 1 1-1h5l2-3h3v6h6a1 1 0 0 1 1 1v4"/><path d="M16 17H8"/><circle cx="6.5" cy="17" r="2"/><circle cx="17.5" cy="17" r="2"/></svg>
+      <span class="font-bold font-display tracking-tight">${truck}</span>
+      <span class="inline-flex items-center gap-1.5 text-[10px] font-num text-white/70 bg-white/10 px-2 py-1 rounded"><span class="w-1.5 h-1.5 rounded-full bg-[#C9683F]"></span>жел. руда</span>
+      <span class="ml-auto text-[11px] font-num bg-white/15 px-2 py-1 rounded">${onVahtaCount} на вахте</span>`;
     card.appendChild(header);
 
     const body = el("div", "divide-y divide-slate-100");
@@ -236,18 +249,24 @@ function renderDashboard(today) {
     rows.forEach(r => {
       const isVahta = r.status === "vahta";
       const urgent = isVahta && r.daysLeft <= 5;
-      const row = el("div", "p-4 flex items-center gap-3");
+      const V = driverVahta(r.driver), R = driverOtdyh(r.driver);
+      const cycleLen = V + R;
+      const posInCycle = isVahta ? (V - r.daysLeft) : (cycleLen - r.daysLeft);
+      const pct = Math.max(4, Math.min(100, Math.round((posInCycle / cycleLen) * 100)));
+      const row = el("div", "p-4 space-y-2");
       row.innerHTML = `
-        <span class="w-2.5 h-2.5 rounded-full shrink-0 ${isVahta ? "bg-emerald-500" : "bg-slate-300"}"></span>
-        <div class="flex-1 min-w-0">
-          <div class="font-semibold text-slate-800 truncate">${escapeHtml(r.driver.name)}</div>
-          <div class="text-xs text-slate-400">${isVahta ? "На вахте" : "Дома"}${r.driver.role ? " · " + escapeHtml(r.driver.role) : ""}</div>
+        <div class="flex items-center gap-3">
+          <span class="text-[10px] font-bold font-num px-1.5 py-0.5 rounded shrink-0 ${isVahta ? "bg-shift/10 text-shift" : "bg-slate-100 text-slate-400"}">${isVahta ? "ВАХТА" : "ДОМА"}</span>
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold text-slate-800 truncate">${escapeHtml(r.driver.name)}</div>
+            ${r.driver.role ? `<div class="text-xs text-slate-400">${escapeHtml(r.driver.role)}</div>` : ""}
+          </div>
+          <div class="text-right shrink-0">
+            <div class="text-lg font-bold font-num ${urgent ? "text-route-600" : "text-diesel"}">${r.daysLeft}</div>
+            <div class="text-[10px] text-slate-400">${isVahta ? "дн. до смены" : "дн. до выхода"}</div>
+          </div>
         </div>
-        <div class="text-right shrink-0">
-          <div class="text-xs ${urgent ? "text-amber-600 font-bold" : "text-slate-400"}">${isVahta ? "дней до смены" : "выходит через"}</div>
-          <div class="text-lg font-bold ${urgent ? "text-amber-600" : "text-slate-700"}">${r.daysLeft}</div>
-          <div class="text-[11px] text-slate-400">${fmtRU(r.switchDate)}</div>
-        </div>`;
+        <div class="roadscale"><div class="roadscale-fill ${isVahta ? "bg-shift" : "bg-slate-300"}" style="width:${pct}%"></div></div>`;
       body.appendChild(row);
     });
     card.appendChild(body);
@@ -260,7 +279,7 @@ function renderDashboard(today) {
     .sort((a, b) => a.switchDate - b.switchDate)
     .slice(0, 6);
 
-  const upCard = el("div", "bg-white rounded-2xl shadow-sm p-4");
+  const upCard = el("div", "bg-white rounded-xl border border-slate-200 p-4");
   upCard.innerHTML = `<div class="font-bold text-slate-700 mb-3 flex items-center gap-2"><span>🔄</span>Ближайшие пересменки</div>`;
   const list = el("div", "space-y-2");
   upcoming.forEach(u => {
@@ -297,7 +316,7 @@ function renderSettings() {
     return vals;
   }
 
-  const trucksCard = el("div", "bg-white rounded-2xl shadow-sm p-4");
+  const trucksCard = el("div", "bg-white rounded-xl border border-slate-200 p-4");
   trucksCard.innerHTML = `<div class="font-bold text-slate-700 mb-1">Машины</div>
     <div class="text-xs text-slate-400 mb-3">Список грузовиков, которые водители видят при выборе в ТТН и ТО/ремонте.</div>`;
   tempTrucks.forEach((truck, idx) => {
@@ -324,7 +343,7 @@ function renderSettings() {
   trucksCard.appendChild(addTruckBtn);
   wrap.appendChild(trucksCard);
 
-  const driversCard = el("div", "bg-white rounded-2xl shadow-sm p-4");
+  const driversCard = el("div", "bg-white rounded-xl border border-slate-200 p-4");
   driversCard.innerHTML = `<div class="font-bold text-slate-700 mb-1">Водители</div>
     <div class="text-xs text-slate-400 mb-3">У каждого можно задать свою длину вахты и отдыха — если кто-то работает дольше 45 дней.</div>`;
   STATE.drivers.forEach(driver => {
@@ -387,13 +406,13 @@ function renderSettings() {
   wrap.appendChild(driversCard);
 
   const btnRow = el("div", "flex gap-3");
-  const saveBtn = el("button", "flex-1 py-3 rounded-xl bg-slate-800 text-white font-semibold shadow-sm", "Сохранить");
+  const saveBtn = el("button", "flex-1 py-3 rounded-xl bg-diesel text-white font-semibold shadow-sm", "Сохранить");
   const resetBtn = el("button", "px-4 py-3 rounded-xl bg-white text-slate-500 font-semibold shadow-sm", "Сбросить");
   btnRow.appendChild(saveBtn);
   btnRow.appendChild(resetBtn);
   wrap.appendChild(btnRow);
 
-  const toast = el("div", "text-center text-sm text-emerald-600 font-semibold hidden", "Сохранено ✓");
+  const toast = el("div", "text-center text-sm text-shift font-semibold hidden", "Сохранено ✓");
   toast.id = "settings-toast";
   wrap.appendChild(toast);
 
@@ -442,7 +461,7 @@ function renderSettings() {
   };
 
   // ---------- аккаунты пользователей (логины + сброс пароля) ----------
-  const accountsCard = el("div", "bg-white rounded-2xl shadow-sm p-4");
+  const accountsCard = el("div", "bg-white rounded-xl border border-slate-200 p-4");
   accountsCard.innerHTML = `
     <div class="font-bold text-slate-700 mb-1">Аккаунты пользователей</div>
     <div class="text-xs text-slate-400 mb-3">Пароли не хранятся и не показываются — так устроена любая безопасная система. Можно отправить водителю письмо для установки нового пароля.</div>
@@ -530,11 +549,11 @@ function buildNav() {
   const nav = document.getElementById("nav");
   const isManager = currentProfile.role === "manager";
   nav.innerHTML = `
-    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="dashboard"><span class="tabicon text-xl transition-transform">🏠</span>Дашборд</button>
-    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="timesheet"><span class="tabicon text-xl transition-transform">🧾</span>Табель</button>
-    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="stats"><span class="tabicon text-xl transition-transform">📊</span>Статистика</button>
-    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="documents"><span class="tabicon text-xl transition-transform">📄</span>ТТН</button>
-    <button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="chat"><span class="tabicon text-xl transition-transform">💬</span>Чат</button>
-    ${isManager ? `<button class="tabbtn relative flex flex-col items-center gap-0.5 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="settings"><span class="tabicon text-xl transition-transform">⚙️</span>Настройки</button>` : ""}`;
+    <button class="tabbtn relative flex flex-col items-center gap-1 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="dashboard"><span class="tabicon transition-transform">${ICONS.dashboard}</span>Дашборд</button>
+    <button class="tabbtn relative flex flex-col items-center gap-1 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="timesheet"><span class="tabicon transition-transform">${ICONS.timesheet}</span>Табель</button>
+    <button class="tabbtn relative flex flex-col items-center gap-1 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="stats"><span class="tabicon transition-transform">${ICONS.stats}</span>Статистика</button>
+    <button class="tabbtn relative flex flex-col items-center gap-1 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="documents"><span class="tabicon transition-transform">${ICONS.documents}</span>ТТН</button>
+    <button class="tabbtn relative flex flex-col items-center gap-1 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="chat"><span class="tabicon transition-transform">${ICONS.chat}</span>Чат</button>
+    ${isManager ? `<button class="tabbtn relative flex flex-col items-center gap-1 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="settings"><span class="tabicon transition-transform">${ICONS.settings}</span>Настройки</button>` : ""}`;
 }
 

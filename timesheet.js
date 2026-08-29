@@ -55,7 +55,7 @@ function renderTimesheet() {
   const year = timesheetMonthDate.getFullYear();
   const month = timesheetMonthDate.getMonth();
 
-  const monthRow = el("div", "bg-white rounded-2xl shadow-sm px-4 py-3 flex items-center justify-between");
+  const monthRow = el("div", "bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center justify-between");
   const prevBtn = el("button", "text-slate-400 text-2xl w-9 h-9 flex items-center justify-center", "‹");
   const nextBtn = el("button", "text-slate-400 text-2xl w-9 h-9 flex items-center justify-center", "›");
   const label = el("div", "font-bold text-slate-700", `${MONTHS_RU[month]} ${year}`);
@@ -89,7 +89,7 @@ function renderTimesheet() {
     const total = rec.shiftPay + rec.maintPay;
     const expanded = !!timesheetExpanded[name];
 
-    const card = el("div", "bg-white rounded-2xl shadow-sm overflow-hidden");
+    const card = el("div", "bg-white rounded-xl border border-slate-200 overflow-hidden");
     const header = el("div", "p-4 flex items-center justify-between cursor-pointer");
     header.innerHTML = `
       <div class="min-w-0">
@@ -97,7 +97,7 @@ function renderTimesheet() {
         <div class="text-xs text-slate-400">${rec.shifts.length} смен${pluralShift(rec.shifts.length)}${rec.maint.length ? ` · ${rec.maint.length} ТО/ремонт` : ""}</div>
       </div>
       <div class="text-right shrink-0 pl-2">
-        <div class="text-lg font-bold text-emerald-600">${total.toLocaleString("ru-RU")} ₽</div>
+        <div class="text-lg font-bold text-shift font-num">${total.toLocaleString("ru-RU")} ₽</div>
         <div class="text-xs text-slate-400">${expanded ? "свернуть ▲" : "подробнее ▼"}</div>
       </div>`;
     header.onclick = () => { timesheetExpanded[name] = !expanded; render(); };
@@ -109,7 +109,7 @@ function renderTimesheet() {
         .sort((a, b) => (a.ttnDate || "").localeCompare(b.ttnDate || ""))
         .forEach((d) => {
           const row = el("div", "px-4 py-2 flex items-center justify-between text-xs gap-2");
-          row.innerHTML = `<span class="text-slate-500 truncate">${fmtRU(parseISO(d.ttnDate))} · ТТН № ${escapeHtml(d.ttnNumber)} · ${escapeHtml(d.truck || "")}</span><span class="font-semibold text-slate-700 shrink-0">6 000 ₽</span>`;
+          row.innerHTML = `<span class="text-slate-500 truncate">${fmtRU(parseISO(d.ttnDate))} · ТТН № ${escapeHtml(d.ttnNumber)} · ${escapeHtml(d.truck || "")}</span><span class="font-semibold text-slate-700 shrink-0 font-num">6 000 ₽</span>`;
           detail.appendChild(row);
         });
       rec.maint.slice()
@@ -118,7 +118,7 @@ function renderTimesheet() {
           const workers = [m.primaryWorker, m.secondaryWorker].filter(Boolean);
           const share = workers.length === 2 ? 3000 : 6000;
           const row = el("div", "px-4 py-2 flex items-center justify-between text-xs gap-2");
-          row.innerHTML = `<span class="text-slate-500 truncate">${fmtRU(parseISO(m.date))} · ${m.type === "Ремонт" ? "🔧 Ремонт" : "🛠️ ТО"} · ${escapeHtml(m.truck || "")}</span><span class="font-semibold text-slate-700 shrink-0">${share.toLocaleString("ru-RU")} ₽</span>`;
+          row.innerHTML = `<span class="text-slate-500 truncate">${fmtRU(parseISO(m.date))} · ${m.type === "Ремонт" ? "🔧 Ремонт" : "🛠️ ТО"} · ${escapeHtml(m.truck || "")}</span><span class="font-semibold text-slate-700 shrink-0 font-num">${share.toLocaleString("ru-RU")} ₽</span>`;
           detail.appendChild(row);
         });
       card.appendChild(detail);
