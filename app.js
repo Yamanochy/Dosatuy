@@ -175,6 +175,8 @@ function computeDashboardWarnings(today) {
     STATE.drivers
       .filter(d => driverStatus(d, today) === "vahta")
       .forEach(d => {
+        const daysIntoVahta = cyclePos(d, today); // 0 = заступил сегодня
+        if (daysIntoVahta < 2) return; // ещё не было времени привезти и внести ТТН — не пугаем зря
         const hasRecent = docs.some(doc =>
           doc.driverName === d.name && doc.ttnDate && parseISO(doc.ttnDate) >= cutoff);
         if (!hasRecent) warnings.push(`${d.name} на вахте, но ТТН от него нет уже 2+ дня`);
