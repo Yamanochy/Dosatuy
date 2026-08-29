@@ -128,6 +128,13 @@ auth.onAuthStateChanged((user) => {
       authScreen.classList.add("hidden");
       shell.classList.remove("hidden");
       startApp();
+    }).catch(() => {
+      // офлайн и в локальном кэше Firestore ещё нет этого документа —
+      // не оставляем белый экран, показываем с тем, что есть
+      currentProfile = { name: user.email, role: "driver" };
+      authScreen.classList.add("hidden");
+      shell.classList.remove("hidden");
+      startApp();
     });
   } else {
     currentUser = null;

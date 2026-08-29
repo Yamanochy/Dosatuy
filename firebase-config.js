@@ -15,6 +15,10 @@ firebase.initializeApp(FIREBASE_CONFIG);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
+// Офлайн-кэш Firestore: без этого запросы к базе зависают без сети
+// и приложение остаётся на белом экране, если открыть его офлайн.
+db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+
 // Код, который нужно ввести при регистрации с ролью «Руководитель»,
 // чтобы случайный человек не мог сам себе выдать права руководителя.
 // Смени на свой секрет.
