@@ -280,7 +280,7 @@ function renderDashboard(today) {
     .slice(0, 6);
 
   const upCard = el("div", "bg-white rounded-xl border border-slate-200 p-4");
-  upCard.innerHTML = `<div class="font-bold text-slate-700 mb-3 flex items-center gap-2"><span>🔄</span>Ближайшие пересменки</div>`;
+  upCard.innerHTML = `<div class="font-bold font-display text-slate-700 mb-3 flex items-center gap-2"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.3M21 12a9 9 0 0 1-15.5 6.3"/><path d="M18 3v4h-4M6 21v-4h4"/></svg>Ближайшие пересменки</div>`;
   const list = el("div", "space-y-2");
   upcoming.forEach(u => {
     const row = el("div", "flex items-center justify-between text-sm bg-slate-50 rounded-xl px-3 py-2");
@@ -334,7 +334,7 @@ function renderSettings() {
     row.appendChild(delBtn);
     trucksCard.appendChild(row);
   });
-  const addTruckBtn = el("button", "text-sm text-slate-600 font-semibold mt-1", "➕ Добавить машину");
+  const addTruckBtn = el("button", "text-sm text-slate-600 font-semibold mt-1", `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M12 5v14M5 12h14"/></svg>Добавить машину`);
   addTruckBtn.onclick = () => {
     tempTrucks = captureTruckInputs();
     tempTrucks.push("");
@@ -383,7 +383,7 @@ function renderSettings() {
     };
   });
 
-  const addDriverBtn = el("button", "text-sm text-slate-600 font-semibold mt-1", "➕ Добавить водителя");
+  const addDriverBtn = el("button", "text-sm text-slate-600 font-semibold mt-1", `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M12 5v14M5 12h14"/></svg>Добавить водителя`);
   addDriverBtn.onclick = () => {
     STATE.drivers.push({
       id: Date.now(),

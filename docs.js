@@ -120,8 +120,8 @@ function renderDocuments() {
   const wrap = el("div", "space-y-3");
 
   const modeRow = el("div", "flex gap-2");
-  const btnTtn = el("button", `flex-1 py-2.5 rounded-xl text-sm font-semibold ${docsMode === "ttn" ? "bg-diesel text-white" : "bg-white text-slate-500"}`, "📄 ТТН");
-  const btnMaint = el("button", `flex-1 py-2.5 rounded-xl text-sm font-semibold ${docsMode === "maintenance" ? "bg-diesel text-white" : "bg-white text-slate-500"}`, "🔧 ТО / Ремонт");
+  const btnTtn = el("button", `flex-1 py-2.5 rounded-xl text-sm font-semibold ${docsMode === "ttn" ? "bg-diesel text-white" : "bg-white text-slate-500"}`, `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M6 2h9l5 5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20V3.5A1.5 1.5 0 0 1 6 2z"/><path d="M14 2v5h5M8 12h8M8 16h5"/></svg>ТТН`);
+  const btnMaint = el("button", `flex-1 py-2.5 rounded-xl text-sm font-semibold ${docsMode === "maintenance" ? "bg-diesel text-white" : "bg-white text-slate-500"}`, `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L2 19l3 3 7.3-7.3a4 4 0 0 0 5.4-5.4l-2.8 2.8-2-2z"/></svg>ТО / Ремонт`);
   btnTtn.onclick = () => { docsMode = "ttn"; render(); };
   btnMaint.onclick = () => { docsMode = "maintenance"; render(); };
   modeRow.appendChild(btnTtn);
@@ -138,7 +138,7 @@ function renderDocuments() {
 // РЕЖИМ: ТТН
 // ============================================================
 function renderTtnSection(wrap) {
-  const addBtn = el("button", "w-full py-3 rounded-xl bg-diesel text-white font-semibold shadow-sm flex items-center justify-center gap-2", "➕ Добавить ТТН / путевой лист");
+  const addBtn = el("button", "w-full py-3 rounded-xl bg-diesel text-white font-semibold shadow-sm flex items-center justify-center gap-2", `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span>Добавить ТТН / путевой лист</span>`);
   addBtn.onclick = () => { addFormOpen = true; selectedFiles = []; render(); };
   wrap.appendChild(addBtn);
 
@@ -148,7 +148,7 @@ function renderTtnSection(wrap) {
 
   const toggleRow = el("div", "flex gap-2");
   const btnCurrent = el("button", `flex-1 py-2 rounded-xl text-sm font-semibold ${!docsShowArchive ? "bg-diesel text-white" : "bg-white text-slate-500"}`, `Текущие (${current.length})`);
-  const btnArchive = el("button", `flex-1 py-2 rounded-xl text-sm font-semibold ${docsShowArchive ? "bg-diesel text-white" : "bg-white text-slate-500"}`, `📦 Архив (${archived.length})`);
+  const btnArchive = el("button", `flex-1 py-2 rounded-xl text-sm font-semibold ${docsShowArchive ? "bg-diesel text-white" : "bg-white text-slate-500"}`, `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><path d="M10 13h4"/></svg>Архив (${archived.length})`);
   btnCurrent.onclick = () => { docsShowArchive = false; render(); };
   btnArchive.onclick = () => { docsShowArchive = true; render(); };
   toggleRow.appendChild(btnCurrent);
@@ -201,10 +201,10 @@ function renderTtnSection(wrap) {
     info.innerHTML = `
       <div class="font-bold text-slate-800">ТТН № ${escapeHtml(doc.ttnNumber)}</div>
       <div class="text-slate-500 text-xs">${doc.ttnDate ? fmtRU(parseISO(doc.ttnDate)) : ""}</div>
-      <div class="text-slate-600 text-xs mt-1">🚛 ${escapeHtml(doc.truck || "—")}</div>
-      <div class="text-slate-600 text-xs">👤 ${escapeHtml(doc.driverName || "—")}</div>
-      <div class="text-slate-600 text-xs">⚖️ ${doc.weight ? doc.weight + " т" : "—"}</div>
-      <div class="text-shift text-xs font-semibold font-num">💰 6 000 ₽</div>
+      <div class="text-slate-600 text-xs mt-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M2 17h1M21 17h1M3 17V10a1 1 0 0 1 1-1h5l2-3h3v6h6a1 1 0 0 1 1 1v4"/><path d="M16 17H8"/><circle cx="6.5" cy="17" r="2"/><circle cx="17.5" cy="17" r="2"/></svg>${escapeHtml(doc.truck || "—")}</div>
+      <div class="text-slate-600 text-xs"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg>${escapeHtml(doc.driverName || "—")}</div>
+      <div class="text-slate-600 text-xs"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M12 3v18M7 21h10"/><path d="M5 7h5M5 7l-2.5 5a2.5 2.5 0 0 0 5 0L5 7z"/><path d="M19 7h-5M19 7l2.5 5a2.5 2.5 0 0 1-5 0L19 7z"/></svg>${doc.weight ? doc.weight + " т" : "—"}</div>
+      <div class="text-shift text-xs font-semibold font-num"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-0.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5a2.5 2.5 0 0 1 2.5-1.5h.5a2 2 0 0 1 0 4h-1a2 2 0 0 0 0 4h.5a2.5 2.5 0 0 0 2.5-1.5"/></svg>6 000 ₽</div>
       <div class="text-slate-300 text-[10px] mt-1">добавил(а): ${escapeHtml(doc.uploadedByName || "")}</div>`;
     card.appendChild(info);
 
@@ -250,8 +250,8 @@ function renderAddForm() {
         <div id="df-photo-count" class="text-xs text-slate-400 font-medium">0 / ${MAX_PHOTOS}</div>
       </div>
       <div class="flex gap-2">
-        <button type="button" id="df-btn-camera" class="flex-1 py-2.5 rounded-lg bg-diesel-700 text-white text-sm font-semibold flex items-center justify-center gap-1.5">📷 Камера</button>
-        <button type="button" id="df-btn-gallery" class="flex-1 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-sm font-semibold flex items-center justify-center gap-1.5">🖼️ Галерея</button>
+        <button type="button" id="df-btn-camera" class="flex-1 py-2.5 rounded-lg bg-diesel-700 text-white text-sm font-semibold flex items-center justify-center gap-1.5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1.5"><path d="M4 8a2 2 0 0 1 2-2h1l1.5-2h7L17 6h1a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>Камера</button>
+        <button type="button" id="df-btn-gallery" class="flex-1 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-sm font-semibold flex items-center justify-center gap-1.5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>Галерея</button>
       </div>
       <input id="df-photo-camera" type="file" accept="image/*" capture="environment" class="hidden" />
       <input id="df-photo-gallery" type="file" accept="image/*" multiple class="hidden" />
@@ -378,7 +378,7 @@ function renderAddForm() {
 // РЕЖИМ: ТО / Ремонт
 // ============================================================
 function renderMaintenanceSection(wrap) {
-  const addBtn = el("button", "w-full py-3 rounded-xl bg-diesel-700 text-white font-semibold shadow-sm flex items-center justify-center gap-2", "➕ Добавить ТО / ремонт");
+  const addBtn = el("button", "w-full py-3 rounded-xl bg-diesel-700 text-white font-semibold shadow-sm flex items-center justify-center gap-2", `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span>Добавить ТО / ремонт</span>`);
   addBtn.onclick = () => { maintFormOpen = true; maintSelectedFiles = []; render(); };
   wrap.appendChild(addBtn);
 
@@ -388,7 +388,7 @@ function renderMaintenanceSection(wrap) {
 
   const toggleRow = el("div", "flex gap-2");
   const btnCurrent = el("button", `flex-1 py-2 rounded-xl text-sm font-semibold ${!maintShowArchive ? "bg-diesel text-white" : "bg-white text-slate-500"}`, `Текущие (${current.length})`);
-  const btnArchive = el("button", `flex-1 py-2 rounded-xl text-sm font-semibold ${maintShowArchive ? "bg-diesel text-white" : "bg-white text-slate-500"}`, `📦 Архив (${archived.length})`);
+  const btnArchive = el("button", `flex-1 py-2 rounded-xl text-sm font-semibold ${maintShowArchive ? "bg-diesel text-white" : "bg-white text-slate-500"}`, `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><path d="M10 13h4"/></svg>Архив (${archived.length})`);
   btnCurrent.onclick = () => { maintShowArchive = false; render(); };
   btnArchive.onclick = () => { maintShowArchive = true; render(); };
   toggleRow.appendChild(btnCurrent);
@@ -438,7 +438,7 @@ function renderMaintenanceSection(wrap) {
       thumbWrap.onclick = () => openLightbox(photos);
     } else {
       thumbWrap.className += " w-20 h-20 bg-slate-100 rounded-xl flex items-center justify-center text-2xl";
-      thumbWrap.textContent = "🔧";
+      thumbWrap.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L2 19l3 3 7.3-7.3a4 4 0 0 0 5.4-5.4l-2.8 2.8-2-2z"/></svg>';
     }
     card.appendChild(thumbWrap);
 
@@ -446,12 +446,12 @@ function renderMaintenanceSection(wrap) {
     const share = workers.length === 2 ? 3000 : 6000;
     const info = el("div", "flex-1 text-sm min-w-0");
     info.innerHTML = `
-      <div class="font-bold text-slate-800">${doc.type === "Ремонт" ? "🔧 Ремонт" : "🛠️ ТО"}</div>
+      <div class="font-bold text-slate-800">${doc.type === "Ремонт" ? "Ремонт" : "ТО"}</div>
       <div class="text-slate-500 text-xs">${doc.date ? fmtRU(parseISO(doc.date)) : ""}</div>
-      <div class="text-slate-600 text-xs mt-1">🚛 ${escapeHtml(doc.truck || "—")}</div>
-      <div class="text-slate-600 text-xs">👤 ${escapeHtml(workers.join(" + ") || "—")}</div>
-      ${doc.note ? `<div class="text-slate-500 text-xs mt-0.5">📝 ${escapeHtml(doc.note)}</div>` : ""}
-      <div class="text-shift text-xs font-semibold font-num">💰 ${share.toLocaleString("ru-RU")} ₽ ${workers.length === 2 ? "каждому" : ""}</div>
+      <div class="text-slate-600 text-xs mt-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M2 17h1M21 17h1M3 17V10a1 1 0 0 1 1-1h5l2-3h3v6h6a1 1 0 0 1 1 1v4"/><path d="M16 17H8"/><circle cx="6.5" cy="17" r="2"/><circle cx="17.5" cy="17" r="2"/></svg>${escapeHtml(doc.truck || "—")}</div>
+      <div class="text-slate-600 text-xs"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg>${escapeHtml(workers.join(" + ") || "—")}</div>
+      ${doc.note ? `<div class="text-slate-500 text-xs mt-0.5"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>${escapeHtml(doc.note)}</div>` : ""}
+      <div class="text-shift text-xs font-semibold font-num"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-0.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5a2.5 2.5 0 0 1 2.5-1.5h.5a2 2 0 0 1 0 4h-1a2 2 0 0 0 0 4h.5a2.5 2.5 0 0 0 2.5-1.5"/></svg>${share.toLocaleString("ru-RU")} ₽ ${workers.length === 2 ? "каждому" : ""}</div>
       <div class="text-slate-300 text-[10px] mt-1">добавил(а): ${escapeHtml(doc.uploadedByName || "")}</div>`;
     card.appendChild(info);
 
@@ -509,8 +509,8 @@ function renderMaintenanceAddForm() {
         <div id="mf-photo-count" class="text-xs text-slate-400 font-medium">0 / ${MAX_PHOTOS}</div>
       </div>
       <div class="flex gap-2">
-        <button type="button" id="mf-btn-camera" class="flex-1 py-2.5 rounded-lg bg-diesel-700 text-white text-sm font-semibold flex items-center justify-center gap-1.5">📷 Камера</button>
-        <button type="button" id="mf-btn-gallery" class="flex-1 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-sm font-semibold flex items-center justify-center gap-1.5">🖼️ Галерея</button>
+        <button type="button" id="mf-btn-camera" class="flex-1 py-2.5 rounded-lg bg-diesel-700 text-white text-sm font-semibold flex items-center justify-center gap-1.5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1.5"><path d="M4 8a2 2 0 0 1 2-2h1l1.5-2h7L17 6h1a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>Камера</button>
+        <button type="button" id="mf-btn-gallery" class="flex-1 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-sm font-semibold flex items-center justify-center gap-1.5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>Галерея</button>
       </div>
       <input id="mf-photo-camera" type="file" accept="image/*" capture="environment" class="hidden" />
       <input id="mf-photo-gallery" type="file" accept="image/*" multiple class="hidden" />
@@ -771,9 +771,9 @@ function openLightbox(urls) {
   const toolbar = el("div", "flex flex-col items-center gap-2 pt-4 shrink-0");
 
   const row1 = el("div", "flex gap-3");
-  const dlBtn = el("button", "px-4 py-2.5 rounded-full bg-white/15 text-white text-sm font-semibold flex items-center gap-1.5", list.length > 1 ? "⬇️ Это фото" : "⬇️ Скачать");
+  const dlBtn = el("button", "px-4 py-2.5 rounded-full bg-white/15 text-white text-sm font-semibold flex items-center gap-1.5", list.length > 1 ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M12 3v13m0 0-4-4m4 4 4-4"/><path d="M4 19h16"/></svg>Это фото` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M12 3v13m0 0-4-4m4 4 4-4"/><path d="M4 19h16"/></svg>Скачать`);
   dlBtn.onclick = (e) => { e.stopPropagation(); downloadPhoto(list[idx], dlBtn); };
-  const shareBtn = el("button", "px-4 py-2.5 rounded-full bg-white/15 text-white text-sm font-semibold flex items-center gap-1.5", list.length > 1 ? "📤 Это фото" : "📤 Отправить");
+  const shareBtn = el("button", "px-4 py-2.5 rounded-full bg-white/15 text-white text-sm font-semibold flex items-center gap-1.5", list.length > 1 ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.7l7.6-4.4M8.2 13.3l7.6 4.4"/></svg>Это фото` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.7l7.6-4.4M8.2 13.3l7.6 4.4"/></svg>Отправить`);
   shareBtn.onclick = (e) => { e.stopPropagation(); sharePhoto(list[idx], shareBtn); };
   row1.appendChild(dlBtn);
   row1.appendChild(shareBtn);
@@ -781,9 +781,9 @@ function openLightbox(urls) {
 
   if (list.length > 1) {
     const row2 = el("div", "flex gap-3");
-    const dlAllBtn = el("button", "px-4 py-2.5 rounded-full bg-shift text-white text-sm font-semibold flex items-center gap-1.5", `⬇️ Все (${list.length})`);
+    const dlAllBtn = el("button", "px-4 py-2.5 rounded-full bg-shift text-white text-sm font-semibold flex items-center gap-1.5", `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M12 3v13m0 0-4-4m4 4 4-4"/><path d="M4 19h16"/></svg>Все (${list.length})`);
     dlAllBtn.onclick = (e) => { e.stopPropagation(); downloadAllPhotos(list, dlAllBtn); };
-    const shareAllBtn = el("button", "px-4 py-2.5 rounded-full bg-shift text-white text-sm font-semibold flex items-center gap-1.5", `📤 Все (${list.length})`);
+    const shareAllBtn = el("button", "px-4 py-2.5 rounded-full bg-shift text-white text-sm font-semibold flex items-center gap-1.5", `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.7l7.6-4.4M8.2 13.3l7.6 4.4"/></svg>Все (${list.length})`);
     shareAllBtn.onclick = (e) => { e.stopPropagation(); shareAllPhotos(list, shareAllBtn); };
     row2.appendChild(dlAllBtn);
     row2.appendChild(shareAllBtn);

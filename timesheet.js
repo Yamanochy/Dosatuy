@@ -74,7 +74,7 @@ function renderTimesheet() {
     : names.filter((n) => n.toLowerCase() === (currentProfile?.name || "").toLowerCase());
 
   if (visibleNames.length) {
-    const exportBtn = el("button", "w-full py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-semibold flex items-center justify-center gap-2", "⬇️ Скачать табель (Excel)");
+    const exportBtn = el("button", "w-full py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-semibold flex items-center justify-center gap-2", `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M12 3v13m0 0-4-4m4 4 4-4"/><path d="M4 19h16"/></svg>Скачать табель (Excel)`);
     exportBtn.onclick = () => exportTimesheetToExcel(perDriver, visibleNames, year, month);
     wrap.appendChild(exportBtn);
   }
@@ -118,7 +118,7 @@ function renderTimesheet() {
           const workers = [m.primaryWorker, m.secondaryWorker].filter(Boolean);
           const share = workers.length === 2 ? 3000 : 6000;
           const row = el("div", "px-4 py-2 flex items-center justify-between text-xs gap-2");
-          row.innerHTML = `<span class="text-slate-500 truncate">${fmtRU(parseISO(m.date))} · ${m.type === "Ремонт" ? "🔧 Ремонт" : "🛠️ ТО"} · ${escapeHtml(m.truck || "")}</span><span class="font-semibold text-slate-700 shrink-0 font-num">${share.toLocaleString("ru-RU")} ₽</span>`;
+          row.innerHTML = `<span class="text-slate-500 truncate">${fmtRU(parseISO(m.date))} · <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-0.5"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L2 19l3 3 7.3-7.3a4 4 0 0 0 5.4-5.4l-2.8 2.8-2-2z"/></svg>${m.type === "Ремонт" ? "Ремонт" : "ТО"} · ${escapeHtml(m.truck || "")}</span><span class="font-semibold text-slate-700 shrink-0 font-num">${share.toLocaleString("ru-RU")} ₽</span>`;
           detail.appendChild(row);
         });
       card.appendChild(detail);

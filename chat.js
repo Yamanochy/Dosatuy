@@ -67,25 +67,26 @@ function renderChat() {
   const wrap = el("div", "pb-24");
 
   const header = el("div", "bg-white rounded-xl border border-slate-200 px-4 py-3 mb-3 flex items-center gap-2 flex-wrap");
-  header.innerHTML = `<span class="text-xl">💬</span><span class="font-bold text-slate-700">Общий чат команды</span>`;
+  header.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#14213D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.7 8.7 0 0 1-4-1L3 20l1-5.5a8.38 8.38 0 0 1-1-4A8.38 8.38 0 0 1 11.5 2a8.5 8.5 0 0 1 9.5 9.5z"/></svg><span class="font-bold font-display text-slate-700">Общий чат команды</span>`;
+  const ICON_BELL = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>';
   const pushStatus = pushPermissionStatus();
   if (pushStatus === "default") {
-    const bellBtn = el("button", "ml-auto text-xs font-semibold bg-diesel text-white px-3 py-1.5 rounded-full flex items-center gap-1", "🔔 Включить уведомления");
+    const bellBtn = el("button", "ml-auto text-xs font-semibold bg-diesel text-white px-3 py-1.5 rounded-full flex items-center", `${ICON_BELL}Включить уведомления`);
     bellBtn.onclick = async () => {
       bellBtn.textContent = "…";
       const ok = await enablePushNotifications();
-      bellBtn.textContent = ok ? "🔔 Уведомления включены" : "🔔 Включить уведомления";
+      bellBtn.innerHTML = ICON_BELL + (ok ? "Уведомления включены" : "Включить уведомления");
       if (ok) { bellBtn.disabled = true; bellBtn.classList.add("opacity-60"); }
     };
     header.appendChild(bellBtn);
   } else if (pushStatus === "granted") {
-    header.appendChild(el("span", "ml-auto text-xs text-shift font-semibold", "🔔 включены"));
+    header.appendChild(el("span", "ml-auto text-xs text-shift font-semibold flex items-center", `${ICON_BELL}включены`));
     enablePushNotifications(true); // тихо обновляем подписку на случай, если она "отвалилась"
   } else if (pushStatus === "denied") {
-    header.appendChild(el("span", "ml-auto text-xs text-slate-400", "🔕 запрещены в браузере"));
+    header.appendChild(el("span", "ml-auto text-xs text-slate-400", "Уведомления запрещены в браузере"));
   }
   if (currentProfile?.role === "manager") {
-    const clearBtn = el("button", "text-xs text-rose-500 font-semibold shrink-0 basis-full text-right", "🗑 Очистить чат");
+    const clearBtn = el("button", "text-xs text-brick font-semibold shrink-0 basis-full text-right flex items-center justify-end", '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>Очистить чат');
     clearBtn.onclick = clearAllChat;
     header.appendChild(clearBtn);
   }
@@ -190,7 +191,7 @@ function renderChatInputBar() {
       <button id="chat-img-remove" type="button" class="absolute -top-1.5 -right-1.5 bg-diesel text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">✕</button>
     </div>
     <div class="flex items-end gap-2">
-      <button id="chat-attach" type="button" class="shrink-0 text-slate-400 w-9 h-9 flex items-center justify-center text-xl">📎</button>
+      <button id="chat-attach" type="button" class="shrink-0 text-slate-400 w-9 h-9 flex items-center justify-center text-xl"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5V17a4 4 0 0 1-4 4H8a5 5 0 0 1-5-5V8a4 4 0 0 1 4-4 4 4 0 0 1 4 4v8a2 2 0 0 1-4 0V9"/></svg></button>
       <input id="chat-photo-input" type="file" accept="image/*" class="hidden" />
       <textarea id="chat-text" rows="1" placeholder="Написать сообщение…"
         class="flex-1 resize-none max-h-24 border-0 focus:ring-0 outline-none text-sm px-2 py-2"></textarea>
