@@ -83,7 +83,7 @@ self.addEventListener("notificationclick", (e) => {
   );
 });
 
-const VERSION = "vahta-v27";
+const VERSION = "vahta-v28";
 const ASSETS = [
   "./",
   "./index.html",
@@ -101,11 +101,32 @@ const ASSETS = [
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
+  // внешние библиотеки с CDN — без них приложение не грузится офлайн,
+  // раньше кэшировались только свои файлы
+  "https://cdn.tailwindcss.com",
+  "https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js",
+  "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js",
+  "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js",
+  "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js",
+  "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js",
 ];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
-    caches.open(VERSION).then((cache) => cache.addAll(ASSETS))
+    caches.open(VERSION).then((cache) =>
+      // cache.addAll() требует CORS-заголовков и валится целиком, если хоть
+      // один CDN-файл их не отдаёт. Кладём по одному, cross-origin — с
+      // no-cors, и не роняем установку из-за одного неудачного файла.
+      Promise.all(
+        ASSETS.map((url) => {
+          const isCrossOrigin = !url.startsWith(self.location.origin) && url.startsWith("http");
+          return fetch(url, isCrossOrigin ? { mode: "no-cors" } : {})
+            .then((resp) => cache.put(url, resp))
+            .catch(() => {});
+        })
+      )
+    )
   );
   self.skipWaiting();
 });
