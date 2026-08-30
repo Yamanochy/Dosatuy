@@ -38,7 +38,7 @@ function computeTimesheet(year, month) {
   maintenanceCache.forEach((m) => {
     if (!inSelectedMonth(m.date, year, month)) return;
     const workers = [m.primaryWorker, m.secondaryWorker].filter(Boolean);
-    const share = workers.length === 2 ? 3000 : 6000;
+    const share = maintShare(m, workers.length);
     workers.forEach((w) => {
       const rec = ensure(w);
       rec.maint.push(m);
@@ -116,9 +116,9 @@ function renderTimesheet() {
         .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
         .forEach((m) => {
           const workers = [m.primaryWorker, m.secondaryWorker].filter(Boolean);
-          const share = workers.length === 2 ? 3000 : 6000;
+          const share = maintShare(m, workers.length);
           const row = el("div", "px-4 py-2 flex items-center justify-between text-xs gap-2");
-          row.innerHTML = `<span class="text-slate-500 truncate">${fmtRU(parseISO(m.date))} · <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-0.5"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L2 19l3 3 7.3-7.3a4 4 0 0 0 5.4-5.4l-2.8 2.8-2-2z"/></svg>${m.type === "Ремонт" ? "Ремонт" : "ТО"} · ${escapeHtml(m.truck || "")}</span><span class="font-semibold text-slate-700 shrink-0 font-num">${share.toLocaleString("ru-RU")} ₽</span>`;
+          row.innerHTML = `<span class="text-slate-500 truncate">${fmtRU(parseISO(m.date))} · <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-0.5"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L2 19l3 3 7.3-7.3a4 4 0 0 0 5.4-5.4l-2.8 2.8-2-2z"/></svg>${m.type === "Ремонт" ? escapeHtml(m.repairTypeName || "Ремонт") : "ТО"} · ${escapeHtml(m.truck || "")}</span><span class="font-semibold text-slate-700 shrink-0 font-num">${share.toLocaleString("ru-RU")} ₽</span>`;
           detail.appendChild(row);
         });
       card.appendChild(detail);
@@ -151,8 +151,9 @@ function exportTimesheetToExcel(perDriver, visibleNames, year, month) {
     });
     r.maint.forEach((m) => {
       const workers = [m.primaryWorker, m.secondaryWorker].filter(Boolean);
-      const share = workers.length === 2 ? 3000 : 6000;
-      detailRows.push([m.date, name, m.type || "ТО/ремонт", m.truck || "", share]);
+      const share = maintShare(m, workers.length);
+      const typeLabel = m.type === "Ремонт" ? (m.repairTypeName || "Ремонт") : "ТО";
+      detailRows.push([m.date, name, typeLabel, m.truck || "", share]);
     });
   });
   detailRows.sort((a, b) => (a[0] || "").localeCompare(b[0] || ""));

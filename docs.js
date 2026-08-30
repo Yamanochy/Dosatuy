@@ -110,6 +110,49 @@ function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// баннер + карточки для записей ТТН/ТО, которые ждут интернета в офлайн-очереди
+function renderPendingBanner(wrap, kind, dateField, labelFn) {
+  const items = pendingQueueCache.filter((q) => q.kind === kind);
+  if (!items.length) return;
+
+  const banner = el("div", "bg-route/10 border border-route/40 rounded-xl p-3 flex items-center gap-2");
+  banner.innerHTML = `
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D98F1F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+    <div class="text-xs text-route-600 font-medium flex-1">${items.length} запис${items.length === 1 ? "ь ждёт" : "и ждут"} интернета — отправится само, как только появится сеть</div>`;
+  const retryBtn = el("button", "text-[11px] font-semibold text-route-600 bg-white px-2.5 py-1.5 rounded-lg shrink-0", "Проверить сейчас");
+  retryBtn.onclick = () => { retryBtn.textContent = "…"; flushOfflineQueue(); };
+  banner.appendChild(retryBtn);
+  wrap.appendChild(banner);
+
+  items.forEach((item) => {
+    const card = el("div", "bg-white rounded-xl border border-dashed border-route/50 overflow-hidden flex gap-3 p-3 opacity-80");
+    const thumbWrap = el("div", "relative shrink-0 w-20 h-20 rounded-xl bg-slate-100 flex items-center justify-center");
+    if (item.photoBlobs && item.photoBlobs[0]) {
+      const thumb = el("img", "w-20 h-20 object-cover rounded-xl");
+      thumb.src = URL.createObjectURL(item.photoBlobs[0]);
+      thumbWrap.appendChild(thumb);
+    }
+    card.appendChild(thumbWrap);
+
+    const info = el("div", "flex-1 text-sm min-w-0");
+    info.innerHTML = `
+      <div class="font-bold text-slate-800">${labelFn(item.payload)}</div>
+      <div class="text-slate-500 text-xs">${item.payload[dateField] ? fmtRU(parseISO(item.payload[dateField])) : ""}</div>
+      <div class="inline-flex items-center gap-1 text-[10px] font-num text-route-600 bg-route/10 px-1.5 py-0.5 rounded mt-1.5"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>ЖДЁТ СЕТИ</div>`;
+    card.appendChild(info);
+
+    const del = el("button", "text-slate-300 hover:text-brick shrink-0 self-start", "✕");
+    del.onclick = () => {
+      if (confirm("Удалить эту неотправленную запись? Она будет потеряна.")) {
+        queueDelete(item.id).then(() => { refreshPendingQueueCache().then(render); });
+      }
+    };
+    card.appendChild(del);
+
+    wrap.appendChild(card);
+  });
+}
+
 // ============================================================
 // ГЛАВНЫЙ РЕНДЕР — переключатель режимов
 // ============================================================
@@ -176,6 +219,8 @@ function renderTtnSection(wrap) {
 
   const baseList = docsShowArchive ? archived : current;
   const shownList = applyDateFilter(baseList, docsFilterFrom, docsFilterTo, "ttnDate");
+
+  if (!docsShowArchive) renderPendingBanner(wrap, "ttn", "ttnDate", (p) => `ТТН № ${escapeHtml(p.ttnNumber)}`);
 
   if (!shownList.length) {
     wrap.appendChild(el("div", "text-center text-slate-400 text-sm py-8",
@@ -344,30 +389,65 @@ function renderAddForm() {
     errBox.classList.add("hidden");
     saveBtn.disabled = true;
 
+    const payload = {
+      ttnNumber, ttnDate, truck, driverName,
+      weight: weight ? Number(weight) : null,
+      uploadedByUid: currentUser.uid,
+      uploadedByName: currentProfile.name,
+    };
+
+    // сначала сжимаем фото на телефоне — это не требует сети, поэтому
+    // делаем это в любом случае, даже если интернета сейчас нет
+    let resizedBlobs = [];
     try {
-      const urls = [];
       for (let i = 0; i < selectedFiles.length; i++) {
-        saveBtn.textContent = `Загружаю фото ${i + 1}/${selectedFiles.length}…`;
-        const resized = await resizeImage(selectedFiles[i]);
-        const url = await uploadToCloudinary(resized);
-        urls.push(url);
+        saveBtn.textContent = `Готовлю фото ${i + 1}/${selectedFiles.length}…`;
+        resizedBlobs.push(await resizeImage(selectedFiles[i]));
+      }
+    } catch (e) {
+      errBox.textContent = "Не получилось обработать фото: " + e.message;
+      errBox.classList.remove("hidden");
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Сохранить";
+      return;
+    }
+
+    try {
+      if (!navigator.onLine) throw new Error("OFFLINE");
+      const urls = [];
+      for (let i = 0; i < resizedBlobs.length; i++) {
+        saveBtn.textContent = `Загружаю фото ${i + 1}/${resizedBlobs.length}…`;
+        urls.push(await uploadToCloudinary(resizedBlobs[i]));
       }
       await db.collection("ttnDocs").add({
-        ttnNumber, ttnDate, truck, driverName,
-        weight: weight ? Number(weight) : null,
+        ...payload,
         photoUrls: urls,
-        uploadedByUid: currentUser.uid,
-        uploadedByName: currentProfile.name,
         uploadedAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
       addFormOpen = false;
       selectedFiles = [];
       render();
     } catch (e) {
-      errBox.textContent = "Не получилось сохранить: " + e.message;
-      errBox.classList.remove("hidden");
-      saveBtn.disabled = false;
-      saveBtn.textContent = "Сохранить";
+      if (!looksLikeNetworkError(e)) {
+        errBox.textContent = "Не получилось сохранить: " + e.message;
+        errBox.classList.remove("hidden");
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Сохранить";
+        return;
+      }
+      // сети нет — не теряем запись, кладём в офлайн-очередь на телефоне
+      try {
+        await queueAdd("ttn", payload, resizedBlobs);
+        await refreshPendingQueueCache();
+        addFormOpen = false;
+        selectedFiles = [];
+        render();
+      } catch (e2) {
+        errBox.textContent = "Не получилось сохранить даже локально: " + e2.message;
+        errBox.classList.remove("hidden");
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Сохранить";
+      }
     }
   };
 
@@ -417,6 +497,8 @@ function renderMaintenanceSection(wrap) {
   const baseList = maintShowArchive ? archived : current;
   const shownList = applyDateFilter(baseList, maintFilterFrom, maintFilterTo, "date");
 
+  if (!maintShowArchive) renderPendingBanner(wrap, "maintenance", "date", (p) => p.type === "Ремонт" ? (p.repairTypeName || "Ремонт") : "ТО");
+
   if (!shownList.length) {
     wrap.appendChild(el("div", "text-center text-slate-400 text-sm py-8",
       maintenanceCache.length ? "Ничего не найдено по этим фильтрам" : "Пока нет записей о ТО и ремонте"));
@@ -443,10 +525,10 @@ function renderMaintenanceSection(wrap) {
     card.appendChild(thumbWrap);
 
     const workers = [doc.primaryWorker, doc.secondaryWorker].filter(Boolean);
-    const share = workers.length === 2 ? 3000 : 6000;
+    const share = maintShare(doc, workers.length);
     const info = el("div", "flex-1 text-sm min-w-0");
     info.innerHTML = `
-      <div class="font-bold text-slate-800">${doc.type === "Ремонт" ? "Ремонт" : "ТО"}</div>
+      <div class="font-bold text-slate-800">${doc.type === "Ремонт" ? (doc.repairTypeName ? escapeHtml(doc.repairTypeName) : "Ремонт") : "ТО"}</div>
       <div class="text-slate-500 text-xs">${doc.date ? fmtRU(parseISO(doc.date)) : ""}</div>
       <div class="text-slate-600 text-xs mt-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M2 17h1M21 17h1M3 17V10a1 1 0 0 1 1-1h5l2-3h3v6h6a1 1 0 0 1 1 1v4"/><path d="M16 17H8"/><circle cx="6.5" cy="17" r="2"/><circle cx="17.5" cy="17" r="2"/></svg>${escapeHtml(doc.truck || "—")}</div>
       <div class="text-slate-600 text-xs"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg>${escapeHtml(workers.join(" + ") || "—")}</div>
@@ -485,6 +567,12 @@ function renderMaintenanceAddForm() {
       <select id="mf-type" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
         <option value="ТО">ТО (техобслуживание)</option>
         <option value="Ремонт">Ремонт</option>
+      </select>
+    </label>
+    <label id="mf-repair-type-wrap" class="block text-xs text-slate-500 hidden">Вид ремонта
+      <select id="mf-repair-type" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
+        <option value="">Выбери вид ремонта</option>
+        ${STATE.repairTypes.map((r) => `<option value="${r.id}" data-price="${r.price}">${escapeHtml(r.name)} — ${r.price.toLocaleString("ru-RU")} ₽</option>`).join("")}
       </select>
     </label>
     <label class="block text-xs text-slate-500">Кто делал (основной)
@@ -528,6 +616,33 @@ function renderMaintenanceAddForm() {
     const own = driverNames.find((n) => n.toLowerCase() === currentProfile.name.toLowerCase());
     if (own) worker1.value = own;
   }
+
+  const typeSelect = card.querySelector("#mf-type");
+  const repairTypeWrap = card.querySelector("#mf-repair-type-wrap");
+  const repairTypeSelect = card.querySelector("#mf-repair-type");
+  const payHint = card.querySelector("#mf-pay-hint");
+
+  function currentBasePay() {
+    if (typeSelect.value === "Ремонт") {
+      const opt = repairTypeSelect.selectedOptions[0];
+      return opt && opt.dataset.price ? Number(opt.dataset.price) : 0;
+    }
+    return 6000;
+  }
+  function updatePayHint() {
+    const isRepair = typeSelect.value === "Ремонт";
+    repairTypeWrap.classList.toggle("hidden", !isRepair);
+    const base = currentBasePay();
+    if (isRepair && !base) {
+      payHint.textContent = "Выбери вид ремонта, чтобы увидеть сумму оплаты.";
+      return;
+    }
+    const half = Math.round(base / 2);
+    payHint.textContent = `Один человек — ${base.toLocaleString("ru-RU")} ₽ ему. Двое — по ${half.toLocaleString("ru-RU")} ₽ каждому.`;
+  }
+  typeSelect.onchange = updatePayHint;
+  repairTypeSelect.onchange = updatePayHint;
+  updatePayHint();
 
   const camInput = card.querySelector("#mf-photo-camera");
   const galInput = card.querySelector("#mf-photo-gallery");
@@ -592,32 +707,76 @@ function renderMaintenanceAddForm() {
       errBox.classList.remove("hidden");
       return;
     }
+    let repairTypeName = null, repairPrice = null;
+    if (type === "Ремонт") {
+      const opt = repairTypeSelect.selectedOptions[0];
+      if (!opt || !opt.dataset.price) {
+        errBox.textContent = "Выбери вид ремонта — от него зависит сумма оплаты.";
+        errBox.classList.remove("hidden");
+        return;
+      }
+      repairTypeName = opt.textContent.split(" — ")[0];
+      repairPrice = Number(opt.dataset.price);
+    }
     errBox.classList.add("hidden");
     saveBtn.disabled = true;
 
+    const payload = {
+      date, truck, type, primaryWorker, secondaryWorker, note,
+      repairTypeName, repairPrice,
+      uploadedByUid: currentUser.uid,
+      uploadedByName: currentProfile.name,
+    };
+
+    let resizedBlobs = [];
     try {
-      const urls = [];
       for (let i = 0; i < maintSelectedFiles.length; i++) {
-        saveBtn.textContent = `Загружаю фото ${i + 1}/${maintSelectedFiles.length}…`;
-        const resized = await resizeImage(maintSelectedFiles[i]);
-        const url = await uploadToCloudinary(resized);
-        urls.push(url);
+        saveBtn.textContent = `Готовлю фото ${i + 1}/${maintSelectedFiles.length}…`;
+        resizedBlobs.push(await resizeImage(maintSelectedFiles[i]));
+      }
+    } catch (e) {
+      errBox.textContent = "Не получилось обработать фото: " + e.message;
+      errBox.classList.remove("hidden");
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Сохранить";
+      return;
+    }
+
+    try {
+      if (!navigator.onLine) throw new Error("OFFLINE");
+      const urls = [];
+      for (let i = 0; i < resizedBlobs.length; i++) {
+        saveBtn.textContent = `Загружаю фото ${i + 1}/${resizedBlobs.length}…`;
+        urls.push(await uploadToCloudinary(resizedBlobs[i]));
       }
       await db.collection("maintenanceDocs").add({
-        date, truck, type, primaryWorker, secondaryWorker, note,
+        ...payload,
         photoUrls: urls,
-        uploadedByUid: currentUser.uid,
-        uploadedByName: currentProfile.name,
         uploadedAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
       maintFormOpen = false;
       maintSelectedFiles = [];
       render();
     } catch (e) {
-      errBox.textContent = "Не получилось сохранить: " + e.message;
-      errBox.classList.remove("hidden");
-      saveBtn.disabled = false;
-      saveBtn.textContent = "Сохранить";
+      if (!looksLikeNetworkError(e)) {
+        errBox.textContent = "Не получилось сохранить: " + e.message;
+        errBox.classList.remove("hidden");
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Сохранить";
+        return;
+      }
+      try {
+        await queueAdd("maintenance", payload, resizedBlobs);
+        await refreshPendingQueueCache();
+        maintFormOpen = false;
+        maintSelectedFiles = [];
+        render();
+      } catch (e2) {
+        errBox.textContent = "Не получилось сохранить даже локально: " + e2.message;
+        errBox.classList.remove("hidden");
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Сохранить";
+      }
     }
   };
 

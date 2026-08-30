@@ -83,11 +83,12 @@ self.addEventListener("notificationclick", (e) => {
   );
 });
 
-const VERSION = "vahta-v30";
+const VERSION = "vahta-v32";
 const ASSETS = [
   "./",
   "./index.html",
   "./data.js",
+  "./offline-queue.js",
   "./app.js",
   "./docs.js",
   "./timesheet.js",

@@ -9,10 +9,20 @@ function loadSettings() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.drivers) && parsed.drivers.length) return parsed;
+      if (parsed && Array.isArray(parsed.drivers) && parsed.drivers.length) return withRepairTypesFallback(parsed);
     }
   } catch (e) {}
   return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+}
+
+// у водителей, уже пользовавшихся приложением до этой функции, в сохранённых
+// настройках (localStorage/Firestore) ещё нет repairTypes — подставляем
+// заводской список, а не оставляем пусто
+function withRepairTypesFallback(s) {
+  if (!Array.isArray(s.repairTypes) || !s.repairTypes.length) {
+    s.repairTypes = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.repairTypes));
+  }
+  return s;
 }
 
 function saveSettings(s) {
@@ -43,7 +53,9 @@ function subscribeCloudSettings() {
         otdyh: data.otdyh,
         drivers: data.drivers,
         trucks: data.trucks,
+        repairTypes: data.repairTypes,
       };
+      STATE = withRepairTypesFallback(STATE);
       saveSettings(STATE); // обновляем локальный кэш
       render();
     } else if (currentProfile?.role === "manager") {
@@ -55,6 +67,21 @@ function subscribeCloudSettings() {
 }
 function saveCloudSettings(newState) {
   return settingsDocRef().set(newState);
+}
+
+// стоимость одной записи ТО/ремонта целиком (до деления между исполнителями).
+// ТО — всегда 6000 ₽. Ремонт — по виду ремонта из Настроек (repairPrice,
+// сохранённый в самой записи на момент её создания — так исторические
+// записи не "поедут", если руководитель потом поменяет цену вида ремонта).
+// Старые записи о ремонте, сделанные до появления видов ремонта — 6000 ₽,
+// как считалось раньше.
+function maintBasePay(doc) {
+  if (doc.type === "Ремонт" && doc.repairPrice) return Number(doc.repairPrice);
+  return 6000;
+}
+function maintShare(doc, workersCount) {
+  const base = maintBasePay(doc);
+  return workersCount === 2 ? Math.round(base / 2) : base;
 }
 
 // ---------- дата-математика ----------
@@ -139,6 +166,7 @@ function activeNamesForTruck(truck, date) {
 const app = document.getElementById("app");
 let currentTab = "dashboard";
 let tempTrucks = null; // черновик списка машин при редактировании в Настройках
+let tempRepairTypes = null; // черновик видов ремонта при редактировании в Настройках
 
 // строгие line-иконки нижней навигации (без эмодзи)
 const ICONS = {
@@ -405,6 +433,62 @@ function renderSettings() {
   driversCard.appendChild(addDriverBtn);
   wrap.appendChild(driversCard);
 
+  // ---------- виды ремонта и их стоимость ----------
+  if (tempRepairTypes === null) tempRepairTypes = STATE.repairTypes.map(r => ({ ...r }));
+
+  function captureRepairInputs() {
+    const rows = document.querySelectorAll("[data-repair-idx]");
+    if (!rows.length) return tempRepairTypes.slice();
+    const vals = [];
+    rows.forEach(row => {
+      const idx = parseInt(row.dataset.repairIdx, 10);
+      const nameInp = row.querySelector('[data-repair-field="name"]');
+      const priceInp = row.querySelector('[data-repair-field="price"]');
+      vals[idx] = {
+        id: tempRepairTypes[idx]?.id || Date.now() + idx,
+        name: nameInp.value,
+        price: parseInt(priceInp.value, 10) || 0,
+      };
+    });
+    return vals;
+  }
+
+  const repairCard = el("div", "bg-white rounded-xl border border-slate-200 p-4");
+  repairCard.innerHTML = `<div class="font-bold text-slate-700 mb-1">Виды ремонта и оплата</div>
+    <div class="text-xs text-slate-400 mb-3">Для каждого вида ремонта — своя сумма (ТО отдельно, всегда 6 000 ₽). При выборе двух исполнителей сумма делится пополам.</div>`;
+  tempRepairTypes.forEach((rt, idx) => {
+    const row = el("div", "flex gap-2 items-center mb-2");
+    row.dataset.repairIdx = idx;
+    const nameInput = el("input", "flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-800");
+    nameInput.dataset.repairField = "name";
+    nameInput.placeholder = "напр. Замена радиатора";
+    nameInput.value = rt.name;
+    const priceInput = el("input", "w-24 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-800 font-num");
+    priceInput.dataset.repairField = "price";
+    priceInput.type = "number";
+    priceInput.min = "0";
+    priceInput.placeholder = "₽";
+    priceInput.value = rt.price;
+    row.appendChild(nameInput);
+    row.appendChild(priceInput);
+    const delBtn = el("button", "text-slate-300 hover:text-brick shrink-0 px-1 text-lg", "✕");
+    delBtn.onclick = () => {
+      tempRepairTypes = captureRepairInputs();
+      tempRepairTypes.splice(idx, 1);
+      render();
+    };
+    row.appendChild(delBtn);
+    repairCard.appendChild(row);
+  });
+  const addRepairBtn = el("button", "text-sm text-slate-600 font-semibold mt-1", `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M12 5v14M5 12h14"/></svg>Добавить вид ремонта`);
+  addRepairBtn.onclick = () => {
+    tempRepairTypes = captureRepairInputs();
+    tempRepairTypes.push({ id: Date.now(), name: "", price: 0 });
+    render();
+  };
+  repairCard.appendChild(addRepairBtn);
+  wrap.appendChild(repairCard);
+
   const btnRow = el("div", "flex gap-3");
   const saveBtn = el("button", "flex-1 py-3 rounded-xl bg-diesel text-white font-semibold shadow-sm", "Сохранить");
   const resetBtn = el("button", "px-4 py-3 rounded-xl bg-white text-slate-500 font-semibold shadow-sm", "Сбросить");
@@ -436,6 +520,11 @@ function renderSettings() {
       STATE.trucks = cleanedTrucks;
       tempTrucks = cleanedTrucks.slice();
     }
+    const cleanedRepairTypes = captureRepairInputs()
+      .map(r => ({ ...r, name: r.name.trim() }))
+      .filter(r => r.name && r.price > 0);
+    STATE.repairTypes = cleanedRepairTypes;
+    tempRepairTypes = cleanedRepairTypes.map(r => ({ ...r }));
     saveSettings(STATE); // локальный кэш — мгновенно
     saveBtn.disabled = true;
     saveBtn.textContent = "Сохраняю…";
@@ -455,6 +544,7 @@ function renderSettings() {
     if (confirm("Сбросить все настройки к заводским значениям? Изменения увидят все устройства.")) {
       STATE = resetSettings();
       tempTrucks = null;
+      tempRepairTypes = null;
       render();
       saveCloudSettings(STATE).catch((e) => alert("Не удалось сбросить в общей базе: " + e.message));
     }
@@ -528,6 +618,10 @@ function startApp() {
   if (typeof subscribeDocs === "function") subscribeDocs();
   if (typeof subscribeMaintenance === "function") subscribeMaintenance();
   if (typeof clearUnreadBadge === "function") clearUnreadBadge();
+  if (typeof refreshPendingQueueCache === "function") {
+    refreshPendingQueueCache().then(() => { if (currentTab === "documents") render(); });
+  }
+  if (typeof flushOfflineQueue === "function" && navigator.onLine) flushOfflineQueue();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
