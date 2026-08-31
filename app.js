@@ -57,7 +57,11 @@ function subscribeCloudSettings() {
       };
       STATE = withRepairTypesFallback(STATE);
       saveSettings(STATE); // обновляем локальный кэш
-      render();
+      // не сносим открытую форму ТТН/ТО-ремонта тем же способом, что и в
+      // offline-queue.js — на этот экран изменение настроек никак не влияет
+      const formOpen = (typeof addFormOpen !== "undefined" && addFormOpen)
+        || (typeof maintFormOpen !== "undefined" && maintFormOpen);
+      if (!formOpen) render();
     } else if (currentProfile?.role === "manager") {
       // документа в базе ещё нет — заводим его тем, что уже есть на этом
       // устройстве (включая уже внесённые правки), чтобы их не потерять
@@ -191,6 +195,7 @@ function render() {
   document.querySelectorAll(".tabbtn").forEach(b => {
     b.classList.toggle("tab-active", b.dataset.tab === currentTab);
   });
+  renderHeaderHero(today);
 }
 
 function el(tag, cls, html) {
@@ -564,10 +569,10 @@ function renderSettings() {
     if (snap.empty) { listEl.textContent = "Пока нет зарегистрированных пользователей."; return; }
     snap.forEach((doc) => {
       const u = doc.data();
-      const row = el("div", "border-t border-slate-100 py-2.5 first:border-t-0 first:pt-0 flex items-center gap-2");
+      const row = el("div", "border-t border-slate-100 py-2.5 first:border-t-0 first:pt-0 flex items-center gap-2 flex-wrap");
       const info = el("div", "flex-1 min-w-0");
       info.innerHTML = `
-        <div class="font-semibold text-slate-700 truncate">${escapeHtml(u.name || "—")}${u.role === "manager" ? " · рук." : ""}</div>
+        <div class="font-semibold text-slate-700 truncate">${escapeHtml(u.name || "—")}${u.role === "manager" ? " · рук." : ""}${u.disabled ? ' <span class="text-brick font-num text-[10px] align-middle">· ДОСТУП ОТКЛЮЧЁН</span>' : ""}</div>
         <div class="text-xs text-slate-400 truncate">${escapeHtml(u.email || "—")}</div>`;
       row.appendChild(info);
       const resetPwBtn = el("button", "shrink-0 text-xs text-slate-500 bg-slate-100 px-2.5 py-1.5 rounded-lg font-medium", "Сброс пароля");
@@ -584,6 +589,31 @@ function renderSettings() {
         resetPwBtn.textContent = "Сброс пароля";
       };
       row.appendChild(resetPwBtn);
+
+      if (doc.id !== currentUser.uid) {
+        const isDisabled = !!u.disabled;
+        const accessBtn = el("button",
+          `shrink-0 text-xs px-2.5 py-1.5 rounded-lg font-medium ${isDisabled ? "bg-shift/10 text-shift" : "bg-brick/10 text-brick"}`,
+          isDisabled ? "Включить доступ" : "Отключить доступ");
+        accessBtn.onclick = async () => {
+          const confirmMsg = isDisabled
+            ? `Вернуть доступ пользователю ${u.name || u.email}?`
+            : `Отключить доступ пользователю ${u.name || u.email}? Он больше не сможет войти в приложение.`;
+          if (!confirm(confirmMsg)) return;
+          accessBtn.disabled = true;
+          accessBtn.textContent = "…";
+          try {
+            await funcs.httpsCallable("setDriverAccess")({ uid: doc.id, disable: !isDisabled });
+            renderSettings();
+          } catch (e) {
+            alert("Не получилось: " + e.message);
+            accessBtn.disabled = false;
+            accessBtn.textContent = isDisabled ? "Включить доступ" : "Отключить доступ";
+          }
+        };
+        row.appendChild(accessBtn);
+      }
+
       listEl.appendChild(row);
     });
   }).catch((e) => {
@@ -633,21 +663,80 @@ function renderUserBar() {
   if (!bar) return;
   const roleLabel = currentProfile.role === "manager" ? "Руководитель" : "Водитель";
   bar.innerHTML = `
-    <span class="text-slate-300">${escapeHtml(currentProfile.name)}</span>
-    <span class="text-slate-500 text-[10px] uppercase tracking-wide bg-white/10 px-2 py-0.5 rounded-full ml-2">${roleLabel}</span>
-    <button id="logout-btn" class="ml-auto text-slate-400 text-xs underline">Выйти</button>`;
+    <img src="icon-192.png" alt="" class="w-7 h-7 rounded-full object-cover ring-1 ring-route/50 shrink-0" />
+    <span class="text-slate-300 truncate">${escapeHtml(currentProfile.name)}</span>
+    <span class="text-slate-500 text-[10px] uppercase tracking-wide bg-white/10 px-2 py-0.5 rounded-full shrink-0">${roleLabel}</span>
+    <button id="theme-toggle-btn" class="ml-auto shrink-0 w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white/70" title="Тема"></button>
+    <button id="logout-btn" class="shrink-0 text-slate-400 text-xs underline">Выйти</button>`;
   document.getElementById("logout-btn").onclick = logout;
+  const themeBtn = document.getElementById("theme-toggle-btn");
+  const ICON_SUN = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  const ICON_MOON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>';
+  const syncThemeIcon = () => {
+    themeBtn.innerHTML = document.documentElement.classList.contains("dark") ? ICON_SUN : ICON_MOON;
+  };
+  syncThemeIcon();
+  themeBtn.onclick = () => {
+    const dark = document.documentElement.classList.toggle("dark");
+    localStorage.setItem("vahta-theme", dark ? "dark" : "light");
+    syncThemeIcon();
+    render(); // на графике Статистики цвета "зашиты" при отрисовке — перерисуем
+  };
+}
+
+// личное приветствие + главная цифра, зависящая от роли — для руководителя:
+// сколько машин сейчас на линии, для водителя: сколько дней до его смены
+function renderHeaderHero(today) {
+  const hero = document.getElementById("header-hero");
+  if (!hero || !currentProfile) return;
+  const hour = new Date().getHours();
+  const greeting = hour < 5 ? "Доброй ночи" : hour < 12 ? "Доброе утро" : hour < 18 ? "Добрый день" : "Добрый вечер";
+  const firstName = (currentProfile.name || "").split(" ")[0] || currentProfile.name;
+
+  let statValue = "—", statLabel = "";
+  if (currentProfile.role === "manager") {
+    const onVahta = STATE.drivers.filter(d => driverStatus(d, today) === "vahta").length;
+    statValue = `${onVahta}<span class="text-lg text-white/40 font-num"> / ${STATE.drivers.length}</span>`;
+    statLabel = "водителей на вахте сейчас";
+  } else {
+    const own = STATE.drivers.find(d => d.name.toLowerCase() === (currentProfile.name || "").toLowerCase());
+    if (own) {
+      const status = driverStatus(own, today);
+      const daysLeft = daysLeftInStage(own, today);
+      statValue = `${daysLeft}`;
+      statLabel = status === "vahta" ? "дней до конца вахты" : "дней до выхода на вахту";
+    } else {
+      statValue = "—";
+      statLabel = "нет данных по графику";
+    }
+  }
+
+  hero.innerHTML = `
+    <div class="text-sm text-white/60">${greeting}, ${escapeHtml(firstName)} 👋</div>
+    <div class="flex items-end gap-3 mt-1">
+      <div class="text-4xl font-bold font-display tracking-tight leading-none">${statValue}</div>
+      <div class="text-xs text-white/50 mb-1">${statLabel}</div>
+    </div>
+    <div class="flex items-center gap-1.5 mt-3 text-[11px] text-white/45 font-num tracking-wide">
+      <span>РОТАЦИЯ 45/45</span><span class="text-white/25">·</span><span>ГК «КРОНА»</span>
+    </div>`;
 }
 
 function buildNav() {
   const nav = document.getElementById("nav");
   const isManager = currentProfile.role === "manager";
-  nav.innerHTML = `
-    <button class="tabbtn relative flex flex-col items-center gap-1 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="dashboard"><span class="tabicon transition-transform">${ICONS.dashboard}</span>Дашборд</button>
-    <button class="tabbtn relative flex flex-col items-center gap-1 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="timesheet"><span class="tabicon transition-transform">${ICONS.timesheet}</span>Табель</button>
-    <button class="tabbtn relative flex flex-col items-center gap-1 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="stats"><span class="tabicon transition-transform">${ICONS.stats}</span>Статистика</button>
-    <button class="tabbtn relative flex flex-col items-center gap-1 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="documents"><span class="tabicon transition-transform">${ICONS.documents}</span>ТТН</button>
-    <button class="tabbtn relative flex flex-col items-center gap-1 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="chat"><span class="tabicon transition-transform">${ICONS.chat}</span>Чат</button>
-    ${isManager ? `<button class="tabbtn relative flex flex-col items-center gap-1 px-2 py-1 text-slate-400 text-[10px] font-medium" data-tab="settings"><span class="tabicon transition-transform">${ICONS.settings}</span>Настройки</button>` : ""}`;
+  const tabs = [
+    ["dashboard", ICONS.dashboard, "Дашборд"],
+    ["timesheet", ICONS.timesheet, "Табель"],
+    ["stats", ICONS.stats, "Статистика"],
+    ["documents", ICONS.documents, "ТТН"],
+    ["chat", ICONS.chat, "Чат"],
+  ];
+  if (isManager) tabs.push(["settings", ICONS.settings, "Настройки"]);
+  nav.innerHTML = tabs.map(([tab, icon, label]) => `
+    <button class="tabbtn relative flex flex-col items-center gap-1 px-2 py-1 text-white/50 text-[10px] font-medium" data-tab="${tab}">
+      <span class="tabicon-wrap w-8 h-8 rounded-full flex items-center justify-center transition-colors"><span class="tabicon transition-transform">${icon}</span></span>
+      ${label}
+    </button>`).join("");
 }
 

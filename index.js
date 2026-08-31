@@ -1,7 +1,35 @@
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
+
+// ---------- отключение/включение доступа водителя (только для руководителя) ----------
+// Отключить доступ можно только так — через серверную функцию с правами
+// администратора. Просто удалить профиль в Firestore недостаточно: вход
+// в Firebase Auth от этого не заблокируется, человек просто получит
+// профиль "по умолчанию" и продолжит пользоваться приложением.
+exports.setDriverAccess = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Нужно быть авторизованным.");
+  const callerUid = request.auth.uid;
+  const callerDoc = await admin.firestore().collection("users").doc(callerUid).get();
+  if (!callerDoc.exists || callerDoc.data().role !== "manager") {
+    throw new HttpsError("permission-denied", "Только руководитель может управлять доступом.");
+  }
+  const targetUid = request.data && request.data.uid;
+  if (!targetUid) throw new HttpsError("invalid-argument", "Не указан пользователь.");
+  if (targetUid === callerUid) throw new HttpsError("failed-precondition", "Нельзя отключить самого себя.");
+
+  const disable = request.data.disable !== false; // true = отключить (по умолчанию), false = включить обратно
+  await admin.auth().updateUser(targetUid, { disabled: disable });
+  if (disable) {
+    // разлогинивает активные сессии этого пользователя — без этого уже
+    // выданный токен мог бы ещё поработать до истечения (обычно до часа)
+    await admin.auth().revokeRefreshTokens(targetUid);
+  }
+  await admin.firestore().collection("users").doc(targetUid).set({ disabled: disable }, { merge: true });
+  return { ok: true };
+});
 
 // убирает из fcmTokens те токены, которые Google отклонил как недействительные
 // (удалённое приложение, отключённые уведомления и т.п.)
@@ -75,8 +103,15 @@ exports.dailySummary = onSchedule(
     ]);
 
     const tripsCount = ttnSnap.size;
-    // каждая запись ТО/ремонта — всегда 6000₽ суммарно (либо всё одному, либо по 3000 двоим)
-    const money = tripsCount * 6000 + maintSnap.size * 6000;
+    // каждый рейс — 6000₽. ТО/ремонт — по виду: ТО всегда 6000₽ суммарно,
+    // ремонт — по цене вида ремонта, сохранённой в самой записи (если её
+    // нет — это старая запись, до появления видов ремонта — тоже 6000₽)
+    let maintMoney = 0;
+    maintSnap.forEach((doc) => {
+      const m = doc.data();
+      maintMoney += (m.type === "Ремонт" && m.repairPrice) ? Number(m.repairPrice) : 6000;
+    });
+    const money = tripsCount * 6000 + maintMoney;
 
     const tokens = [];
     usersSnap.forEach((doc) => {

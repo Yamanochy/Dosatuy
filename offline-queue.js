@@ -84,6 +84,7 @@ function looksLikeNetworkError(e) {
 async function flushOfflineQueue() {
   if (offlineFlushInProgress) return;
   offlineFlushInProgress = true;
+  let syncedAny = false;
   try {
     await refreshPendingQueueCache();
     for (const item of pendingQueueCache) {
@@ -99,6 +100,7 @@ async function flushOfflineQueue() {
           uploadedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
         await queueDelete(item.id);
+        syncedAny = true;
       } catch (e) {
         break; // сети всё ещё нет (или другая заминка) — остальное попробуем позже
       }
@@ -106,7 +108,16 @@ async function flushOfflineQueue() {
   } finally {
     await refreshPendingQueueCache();
     offlineFlushInProgress = false;
-    if (typeof currentTab !== "undefined" && currentTab === "documents") render();
+    // ВАЖНО: перерисовываем экран, только если реально что-то отправили —
+    // и только если человек прямо сейчас не заполняет форму добавления.
+    // Раньше здесь был безусловный render() на каждой проверке (каждые 25 сек),
+    // из-за чего открытая форма ТТН/ТО-ремонта сама сбрасывалась через
+    // некоторое время, даже если очередь была пустой.
+    const formOpen = (typeof addFormOpen !== "undefined" && addFormOpen)
+      || (typeof maintFormOpen !== "undefined" && maintFormOpen);
+    if (syncedAny && !formOpen && typeof currentTab !== "undefined" && currentTab === "documents") {
+      render();
+    }
   }
 }
 

@@ -20,7 +20,8 @@ function subscribeDocs() {
   docsUnsub = db.collection("ttnDocs").orderBy("uploadedAt", "desc")
     .onSnapshot((snap) => {
       docsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      if (currentTab === "documents" && docsMode === "ttn") renderDocuments();
+      // не сносим форму, если человек как раз сейчас её заполняет
+      if (currentTab === "documents" && docsMode === "ttn" && !addFormOpen) renderDocuments();
     }, (err) => { console.error(err); });
 }
 
@@ -38,7 +39,8 @@ function subscribeMaintenance() {
   maintenanceUnsub = db.collection("maintenanceDocs").orderBy("uploadedAt", "desc")
     .onSnapshot((snap) => {
       maintenanceCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      if (currentTab === "documents" && docsMode === "maintenance") renderDocuments();
+      // не сносим форму, если человек как раз сейчас её заполняет
+      if (currentTab === "documents" && docsMode === "maintenance" && !maintFormOpen) renderDocuments();
     }, (err) => { console.error(err); });
 }
 

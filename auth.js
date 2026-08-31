@@ -4,6 +4,7 @@
 
 let currentUser = null;     // объект firebase auth
 let currentProfile = null;  // { name, email, role } из Firestore
+let pendingAuthMessage = ""; // переживает повторный onAuthStateChanged(null) после signOut()
 
 const authScreen = document.getElementById("auth-screen");
 const shell = document.getElementById("app-shell");
@@ -112,6 +113,7 @@ function translateAuthError(e) {
     "auth/user-not-found": "Пользователь не найден.",
     "auth/wrong-password": "Неверный пароль.",
     "auth/invalid-credential": "Неверный email или пароль.",
+    "auth/user-disabled": "Доступ к приложению отключён. Обратись к руководителю.",
   };
   return map[e.code] || ("Ошибка: " + e.message);
 }
@@ -125,6 +127,17 @@ auth.onAuthStateChanged((user) => {
     currentUser = user;
     db.collection("users").doc(user.uid).get().then((doc) => {
       currentProfile = doc.exists ? doc.data() : { name: user.email, role: "driver" };
+      if (currentProfile.disabled) {
+        // доступ отключён руководителем — не пускаем дальше, даже если
+        // старый токен формально ещё не истёк.
+        // ВАЖНО: signOut() асинхронно вызовет этот же обработчик ещё раз,
+        // уже с user=null — сообщение кладём в переменную, которая
+        // переживёт этот второй вызов, а не теряется вместе с аргументом
+        pendingAuthMessage = "Доступ к приложению отключён. Обратись к руководителю.";
+        auth.signOut();
+        renderAuthScreen("login", pendingAuthMessage);
+        return;
+      }
       authScreen.classList.add("hidden");
       shell.classList.remove("hidden");
       startApp();
@@ -139,6 +152,7 @@ auth.onAuthStateChanged((user) => {
   } else {
     currentUser = null;
     currentProfile = null;
-    renderAuthScreen("login");
+    renderAuthScreen("login", pendingAuthMessage);
+    pendingAuthMessage = ""; // показали один раз — дальше обычный пустой логин
   }
 });

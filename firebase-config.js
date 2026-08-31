@@ -14,6 +14,7 @@ const FIREBASE_CONFIG = {
 firebase.initializeApp(FIREBASE_CONFIG);
 const auth = firebase.auth();
 const db = firebase.firestore();
+const funcs = firebase.functions();
 
 // Офлайн-кэш Firestore: без этого запросы к базе зависают без сети
 // и приложение остаётся на белом экране, если открыть его офлайн.

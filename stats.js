@@ -87,6 +87,10 @@ function renderStatistics() {
       return;
     }
 
+    const isDark = document.documentElement.classList.contains("dark");
+    const gridColor = isDark ? "rgba(148,163,184,0.15)" : "rgba(148,163,184,0.25)";
+    const tickColor = isDark ? "#94A3B8" : "#64748B";
+
     const months = [];
     for (let i = 5; i >= 0; i--) months.push(new Date(year, month - i, 1));
 
@@ -101,11 +105,14 @@ function renderStatistics() {
         type: "bar",
         data: {
           labels: months.map((d) => MONTHS_RU[d.getMonth()].slice(0, 3)),
-          datasets: [{ data: tripsPerMonth, backgroundColor: "#1e293b", borderRadius: 6, maxBarThickness: 28 }],
+          datasets: [{ data: tripsPerMonth, backgroundColor: isDark ? "#6B8AC4" : "#1e293b", borderRadius: 6, maxBarThickness: 28 }],
         },
         options: {
           plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+          scales: {
+            y: { beginAtZero: true, ticks: { precision: 0, color: tickColor }, grid: { color: gridColor } },
+            x: { ticks: { color: tickColor }, grid: { display: false } },
+          },
         },
       }));
     }
@@ -126,7 +133,10 @@ function renderStatistics() {
         options: {
           indexAxis: "y",
           plugins: { legend: { display: false } },
-          scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+          scales: {
+            x: { beginAtZero: true, ticks: { precision: 0, color: tickColor }, grid: { color: gridColor } },
+            y: { ticks: { color: tickColor }, grid: { display: false } },
+          },
         },
       }));
     }
