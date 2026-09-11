@@ -88,6 +88,14 @@ function maintShare(doc, workersCount) {
   return workersCount === 2 ? Math.round(base / 2) : base;
 }
 
+// сопоставление одного и того же человека при разном написании ФИО:
+// в аккаунте может быть «Мусаев Абдула», а в настройках водителей уже
+// «Мусаев Абдула Могомедович» (отчество добавили позже) — сравниваем по
+// фамилии и имени, иначе водитель не увидит свой же табель
+function nameKey(name) {
+  return String(name || "").trim().toLowerCase().split(/\s+/).slice(0, 2).join(" ");
+}
+
 // ---------- дата-математика ----------
 function toDateOnly(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());

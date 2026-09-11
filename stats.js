@@ -53,7 +53,8 @@ function renderStatistics() {
   truckCard.innerHTML = `<div class="font-bold text-slate-700 mb-2 text-sm">Самосвалы в этом месяце</div><div id="chart-trucks-wrap"><canvas id="chart-trucks" height="120"></canvas></div>`;
   wrap.appendChild(truckCard);
 
-  if (currentProfile?.role === "manager") {
+  // топ видят все — водителям это как раз интересно и мотивирует
+  {
     const entries = Object.values(monthData)
       .map((r) => ({ name: r.name, trips: r.shifts.length, total: r.shiftPay + r.maintPay }))
       .sort((a, b) => b.trips - a.trips);
@@ -63,8 +64,9 @@ function renderStatistics() {
       const list = el("div", "space-y-1.5");
       entries.slice(0, 6).forEach((e, i) => {
         const medal = `<span class="font-num text-slate-400">${i + 1}.</span>`;
+        const isMe = nameKey(e.name) === nameKey(currentProfile?.name);
         const row = el("div", "flex items-center justify-between text-sm");
-        row.innerHTML = `<span class="text-slate-700">${medal} ${escapeHtml(e.name)}</span><span class="font-semibold text-slate-500">${e.trips} рейс${pluralShift(e.trips)}</span>`;
+        row.innerHTML = `<span class="${isMe ? "text-diesel font-bold" : "text-slate-700"}">${medal} ${escapeHtml(e.name)}${isMe ? ` <span class="text-[10px] font-num bg-route/20 text-route-600 px-1.5 py-0.5 rounded align-middle">ТЫ</span>` : ""}</span><span class="font-semibold ${isMe ? "text-diesel" : "text-slate-500"}">${e.trips} рейс${pluralShift(e.trips)}</span>`;
         list.appendChild(row);
       });
       topCard.appendChild(list);

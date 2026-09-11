@@ -318,7 +318,7 @@ function renderAddForm() {
     driverNames.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("") +
     `<option value="__other__">Другой (вписать ФИО)</option>`;
   const preselect = currentProfile?.role === "driver" &&
-    driverNames.find((n) => n.toLowerCase() === currentProfile.name.toLowerCase());
+    driverNames.find((n) => nameKey(n) === nameKey(currentProfile.name));
   if (preselect) driverSelect.value = preselect;
   driverSelect.onchange = () => {
     otherInput.classList.toggle("hidden", driverSelect.value !== "__other__");
@@ -615,7 +615,7 @@ function renderMaintenanceAddForm() {
   const worker1 = card.querySelector("#mf-worker1");
   const worker2 = card.querySelector("#mf-worker2");
   if (currentProfile?.role === "driver") {
-    const own = driverNames.find((n) => n.toLowerCase() === currentProfile.name.toLowerCase());
+    const own = driverNames.find((n) => nameKey(n) === nameKey(currentProfile.name));
     if (own) worker1.value = own;
   }
 

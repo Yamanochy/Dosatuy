@@ -69,11 +69,10 @@ function renderTimesheet() {
   const perDriver = computeTimesheet(year, month);
   const names = Object.keys(perDriver).sort((a, b) => a.localeCompare(b, "ru"));
   const isManager = currentProfile?.role === "manager";
-  const visibleNames = isManager
-    ? names
-    : names.filter((n) => n.toLowerCase() === (currentProfile?.name || "").toLowerCase());
+  // табель открыт всем — водители видят и свои деньги, и напарников
+  const visibleNames = names;
 
-  if (visibleNames.length) {
+  if (visibleNames.length && isManager) {
     const exportBtn = el("button", "w-full py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-semibold flex items-center justify-center gap-2", `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M12 3v13m0 0-4-4m4 4 4-4"/><path d="M4 19h16"/></svg>Скачать табель (Excel)`);
     exportBtn.onclick = () => exportTimesheetToExcel(perDriver, visibleNames, year, month);
     wrap.appendChild(exportBtn);
@@ -88,12 +87,13 @@ function renderTimesheet() {
     const rec = perDriver[name];
     const total = rec.shiftPay + rec.maintPay;
     const expanded = !!timesheetExpanded[name];
+    const isMe = nameKey(name) === nameKey(currentProfile?.name);
 
-    const card = el("div", "bg-white rounded-xl border border-slate-200 overflow-hidden");
+    const card = el("div", `bg-white rounded-xl border overflow-hidden ${isMe ? "border-route" : "border-slate-200"}`);
     const header = el("div", "p-4 flex items-center justify-between cursor-pointer");
     header.innerHTML = `
       <div class="min-w-0">
-        <div class="font-bold text-slate-800 truncate">${escapeHtml(name)}</div>
+        <div class="font-bold text-slate-800 truncate">${escapeHtml(name)}${isMe ? ` <span class="text-[10px] font-num bg-route/20 text-route-600 px-1.5 py-0.5 rounded align-middle">ТЫ</span>` : ""}</div>
         <div class="text-xs text-slate-400">${rec.shifts.length} смен${pluralShift(rec.shifts.length)}${rec.maint.length ? ` · ${rec.maint.length} ТО/ремонт` : ""}</div>
       </div>
       <div class="text-right shrink-0 pl-2">
