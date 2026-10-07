@@ -22,7 +22,15 @@ function withRepairTypesFallback(s) {
   if (!Array.isArray(s.repairTypes) || !s.repairTypes.length) {
     s.repairTypes = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.repairTypes));
   }
+  // у настроек, сохранённых до появления гос. номеров, этого поля ещё нет
+  if (!s.truckPlates || typeof s.truckPlates !== "object") s.truckPlates = {};
   return s;
+}
+
+// гос. номер машины по её названию (пусто, если ещё не заполнен)
+function truckPlate(truckName) {
+  if (!truckName || !STATE.truckPlates) return "";
+  return STATE.truckPlates[truckName] || "";
 }
 
 function saveSettings(s) {
@@ -53,6 +61,7 @@ function subscribeCloudSettings() {
         otdyh: data.otdyh,
         drivers: data.drivers,
         trucks: data.trucks,
+        truckPlates: data.truckPlates,
         repairTypes: data.repairTypes,
       };
       STATE = withRepairTypesFallback(STATE);
@@ -179,6 +188,7 @@ const app = document.getElementById("app");
 let currentTab = "dashboard";
 let tempTrucks = null; // черновик списка машин при редактировании в Настройках
 let tempRepairTypes = null; // черновик видов ремонта при редактировании в Настройках
+let tempPlates = null; // черновик гос. номеров машин
 
 // строгие line-иконки нижней навигации (без эмодзи)
 const ICONS = {
@@ -349,6 +359,8 @@ function renderSettings() {
 
   if (tempTrucks === null) tempTrucks = STATE.trucks.slice();
 
+  if (tempPlates === null) tempPlates = Object.assign({}, STATE.truckPlates || {});
+
   function captureTruckInputs() {
     const inputs = document.querySelectorAll("[data-truck-idx]");
     if (!inputs.length) return tempTrucks.slice();
@@ -356,19 +368,39 @@ function renderSettings() {
     inputs.forEach(inp => { vals[parseInt(inp.dataset.truckIdx, 10)] = inp.value; });
     return vals;
   }
+  // гос. номера привязаны к названию машины, поэтому забираем их вместе
+  // с названиями: если название поправили, номер должен уехать за ним
+  function capturePlateInputs(names) {
+    const inputs = document.querySelectorAll("[data-plate-idx]");
+    const out = {};
+    inputs.forEach(inp => {
+      const i = parseInt(inp.dataset.plateIdx, 10);
+      const name = (names[i] || "").trim();
+      if (name && inp.value.trim()) out[name] = inp.value.trim();
+    });
+    return out;
+  }
 
   const trucksCard = el("div", "bg-white rounded-xl border border-slate-200 p-4");
   trucksCard.innerHTML = `<div class="font-bold text-slate-700 mb-1">Машины</div>
-    <div class="text-xs text-slate-400 mb-3">Список грузовиков, которые водители видят при выборе в ТТН и ТО/ремонте.</div>`;
+    <div class="text-xs text-slate-400 mb-3">Название и гос. номер. Номер попадает в реестр перевозок, который выгружается из вкладки «ТТН».</div>`;
   tempTrucks.forEach((truck, idx) => {
     const row = el("div", "flex gap-2 items-center mb-2");
     const input = el("input", "flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-800");
     input.value = truck;
     input.dataset.truckIdx = idx;
+    input.placeholder = "Название";
     row.appendChild(input);
+    const plateInput = el("input", "w-32 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-800 font-num shrink-0");
+    plateInput.value = tempPlates[truck] || "";
+    plateInput.dataset.plateIdx = idx;
+    plateInput.placeholder = "Гос. номер";
+    row.appendChild(plateInput);
     const delBtn = el("button", "text-slate-300 hover:text-rose-500 shrink-0 px-1 text-lg", "✕");
     delBtn.onclick = () => {
-      tempTrucks = captureTruckInputs();
+      const names = captureTruckInputs();
+      tempPlates = capturePlateInputs(names);
+      tempTrucks = names;
       tempTrucks.splice(idx, 1);
       render();
     };
@@ -377,7 +409,9 @@ function renderSettings() {
   });
   const addTruckBtn = el("button", "text-sm text-slate-600 font-semibold mt-1", `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M12 5v14M5 12h14"/></svg>Добавить машину`);
   addTruckBtn.onclick = () => {
-    tempTrucks = captureTruckInputs();
+    const names = captureTruckInputs();
+    tempPlates = capturePlateInputs(names);
+    tempTrucks = names;
     tempTrucks.push("");
     render();
   };
@@ -528,10 +562,17 @@ function renderSettings() {
     // пустые (без ФИО) записи не сохраняем — так добавленный, но не заполненный
     // водитель не остаётся висеть в списке и не появляется в выборе для ТТН
     STATE.drivers = STATE.drivers.filter(d => d.name && d.name.trim());
-    const cleanedTrucks = captureTruckInputs().map(t => t.trim()).filter(Boolean);
+    const rawNames = captureTruckInputs();
+    const platesByName = capturePlateInputs(rawNames);
+    const cleanedTrucks = rawNames.map(t => t.trim()).filter(Boolean);
     if (cleanedTrucks.length) {
       STATE.trucks = cleanedTrucks;
       tempTrucks = cleanedTrucks.slice();
+      // оставляем номера только для машин, которые реально есть в списке
+      const cleanedPlates = {};
+      cleanedTrucks.forEach(n => { if (platesByName[n]) cleanedPlates[n] = platesByName[n]; });
+      STATE.truckPlates = cleanedPlates;
+      tempPlates = Object.assign({}, cleanedPlates);
     }
     const cleanedRepairTypes = captureRepairInputs()
       .map(r => ({ ...r, name: r.name.trim() }))
@@ -557,6 +598,7 @@ function renderSettings() {
     if (confirm("Сбросить все настройки к заводским значениям? Изменения увидят все устройства.")) {
       STATE = resetSettings();
       tempTrucks = null;
+      tempPlates = null;
       tempRepairTypes = null;
       render();
       saveCloudSettings(STATE).catch((e) => alert("Не удалось сбросить в общей базе: " + e.message));

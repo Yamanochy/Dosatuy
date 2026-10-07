@@ -219,6 +219,20 @@ function renderTtnSection(wrap) {
     if (fTo) fTo.onchange = () => { docsFilterTo = fTo.value; render(); };
   }, 0);
 
+  // Реестр строится по ВСЕМ рейсам за период — и текущим, и архивным,
+  // иначе выгрузка зависела бы от того, какая вкладка сейчас открыта.
+  const registryList = applyDateFilter(docsCache, docsFilterFrom, docsFilterTo, "ttnDate");
+  if (currentProfile?.role === "manager" && registryList.length) {
+    const regBtn = el("button", "w-full py-2.5 rounded-xl bg-white border border-diesel text-diesel text-sm font-semibold flex items-center justify-center gap-2",
+      `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13m0 0-4-4m4 4 4-4"/><path d="M4 19h16"/></svg>Скачать реестр перевозок (${registryList.length})`);
+    regBtn.onclick = () => exportRegistryExcel(registryList);
+    wrap.appendChild(regBtn);
+    if (!docsFilterFrom && !docsFilterTo) {
+      wrap.appendChild(el("div", "text-[11px] text-slate-400 -mt-1 px-1",
+        "Период не задан — в реестр попадут все рейсы. Поставь даты выше, чтобы выгрузить за нужный период."));
+    }
+  }
+
   const baseList = docsShowArchive ? archived : current;
   const shownList = applyDateFilter(baseList, docsFilterFrom, docsFilterTo, "ttnDate");
 
@@ -954,4 +968,108 @@ function openLightbox(urls) {
   overlay.appendChild(toolbar);
 
   document.body.appendChild(overlay);
+}
+
+
+// ============================================================
+// РЕЕСТР ПЕРЕВОЗОК — выгрузка в Excel за выбранный период
+// ============================================================
+function exportRegistryExcel(list) {
+  if (typeof XLSX === "undefined") {
+    alert("Не удалось загрузить модуль Excel — нужен интернет.");
+    return;
+  }
+  if (!list.length) {
+    alert("За выбранный период рейсов нет.");
+    return;
+  }
+
+  const sorted = list.slice().sort((a, b) => (a.ttnDate || "").localeCompare(b.ttnDate || ""));
+  const periodLabel = (docsFilterFrom || docsFilterTo)
+    ? `${docsFilterFrom ? fmtRU(parseISO(docsFilterFrom)) : "начало"} — ${docsFilterTo ? fmtRU(parseISO(docsFilterTo)) : "сегодня"}`
+    : "весь период";
+
+  // ---------- Лист 1: построчный реестр ----------
+  const rows = [
+    ["РЕЕСТР ПЕРЕВОЗОК"],
+    ["Период:", periodLabel],
+    ["Выгружено:", fmtRU(new Date())],
+    [],
+    ["№", "Дата рейса", "№ ТТН", "Машина", "Гос. номер", "Водитель", "Вес груза, т"],
+  ];
+  let totalTons = 0;
+  sorted.forEach((d, i) => {
+    const tons = Number(d.weight) || 0;
+    totalTons += tons;
+    rows.push([
+      i + 1,
+      d.ttnDate ? fmtRU(parseISO(d.ttnDate)) : "",
+      d.ttnNumber || "",
+      d.truck || "",
+      truckPlate(d.truck),
+      d.driverName || "",
+      tons || "",
+    ]);
+  });
+  rows.push([]);
+  rows.push(["", "", "", "", "", "ИТОГО рейсов:", sorted.length]);
+  rows.push(["", "", "", "", "", "ИТОГО тонн:", Math.round(totalTons * 100) / 100]);
+
+  // ---------- Лист 2: свод по машинам ----------
+  const byTruck = {};
+  sorted.forEach((d) => {
+    const key = d.truck || "— не указана —";
+    if (!byTruck[key]) byTruck[key] = { trips: 0, tons: 0 };
+    byTruck[key].trips += 1;
+    byTruck[key].tons += Number(d.weight) || 0;
+  });
+  const truckRows = [["СВОД ПО МАШИНАМ"], ["Период:", periodLabel], [],
+                     ["Машина", "Гос. номер", "Рейсов", "Тонн", "Средний вес рейса, т"]];
+  Object.keys(byTruck).sort((a, b) => a.localeCompare(b, "ru")).forEach((name) => {
+    const t = byTruck[name];
+    truckRows.push([
+      name, truckPlate(name), t.trips,
+      Math.round(t.tons * 100) / 100,
+      t.trips ? Math.round((t.tons / t.trips) * 100) / 100 : 0,
+    ]);
+  });
+  truckRows.push([]);
+  truckRows.push(["ИТОГО", "", sorted.length, Math.round(totalTons * 100) / 100, ""]);
+
+  // ---------- Лист 3: свод по водителям ----------
+  const byDriver = {};
+  sorted.forEach((d) => {
+    const key = d.driverName || "— не указан —";
+    if (!byDriver[key]) byDriver[key] = { trips: 0, tons: 0 };
+    byDriver[key].trips += 1;
+    byDriver[key].tons += Number(d.weight) || 0;
+  });
+  const driverRows = [["СВОД ПО ВОДИТЕЛЯМ"], ["Период:", periodLabel], [],
+                      ["Водитель", "Рейсов", "Тонн", "Средний вес рейса, т"]];
+  Object.keys(byDriver).sort((a, b) => a.localeCompare(b, "ru")).forEach((name) => {
+    const t = byDriver[name];
+    driverRows.push([
+      name, t.trips,
+      Math.round(t.tons * 100) / 100,
+      t.trips ? Math.round((t.tons / t.trips) * 100) / 100 : 0,
+    ]);
+  });
+  driverRows.push([]);
+  driverRows.push(["ИТОГО", sorted.length, Math.round(totalTons * 100) / 100, ""]);
+
+  const wb = XLSX.utils.book_new();
+  const ws1 = XLSX.utils.aoa_to_sheet(rows);
+  ws1["!cols"] = [{ wch: 5 }, { wch: 13 }, { wch: 14 }, { wch: 18 }, { wch: 14 }, { wch: 26 }, { wch: 13 }];
+  XLSX.utils.book_append_sheet(wb, ws1, "Реестр");
+  const ws2 = XLSX.utils.aoa_to_sheet(truckRows);
+  ws2["!cols"] = [{ wch: 20 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 20 }];
+  XLSX.utils.book_append_sheet(wb, ws2, "По машинам");
+  const ws3 = XLSX.utils.aoa_to_sheet(driverRows);
+  ws3["!cols"] = [{ wch: 28 }, { wch: 10 }, { wch: 12 }, { wch: 20 }];
+  XLSX.utils.book_append_sheet(wb, ws3, "По водителям");
+
+  const fileTag = (docsFilterFrom || docsFilterTo)
+    ? `${docsFilterFrom || "нач"}_${docsFilterTo || "сег"}`
+    : "весь_период";
+  XLSX.writeFile(wb, `Реестр_перевозок_${fileTag}.xlsx`);
 }
