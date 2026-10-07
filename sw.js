@@ -83,7 +83,7 @@ self.addEventListener("notificationclick", (e) => {
   );
 });
 
-const VERSION = "vahta-v41";
+const VERSION = "vahta-v42";
 
 // Свои файлы — без них приложение офлайн не запустится вообще.
 // Если хоть один не скачался, установка ДОЛЖНА провалиться, чтобы
@@ -120,7 +120,7 @@ const CDN_ASSETS = [
   "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js",
   "https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js",
   "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js",
+  "https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js",
 ];
 
 self.addEventListener("install", (e) => {

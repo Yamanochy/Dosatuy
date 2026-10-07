@@ -970,10 +970,54 @@ function openLightbox(urls) {
   document.body.appendChild(overlay);
 }
 
+// ============================================================
+// РЕЕСТР ПЕРЕВОЗОК — оформленная выгрузка в Excel за период
+// ============================================================
 
-// ============================================================
-// РЕЕСТР ПЕРЕВОЗОК — выгрузка в Excel за выбранный период
-// ============================================================
+// стилевые заготовки (библиотека xlsx-js-style понимает cell.s)
+const XL_BRD = { style: "thin", color: { rgb: "9AA4B2" } };
+const XL_BOX = { top: XL_BRD, bottom: XL_BRD, left: XL_BRD, right: XL_BRD };
+const XL_NAVY = "14213D";
+
+// склонение слова «рейс»: 1 рейс, 2–4 рейса, 5+ рейсов
+// (pluralShift из timesheet.js склоняет «смену», окончания другие)
+function pluralTrip(n) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return "";
+  if ([2, 3, 4].includes(m10) && ![12, 13, 14].includes(m100)) return "а";
+  return "ов";
+}
+
+function xlStyleRange(ws, r1, c1, r2, c2, styleFn) {
+  for (let r = r1; r <= r2; r++) {
+    for (let c = c1; c <= c2; c++) {
+      const a = XLSX.utils.encode_cell({ r: r, c: c });
+      if (!ws[a]) ws[a] = { t: "s", v: "" };
+      ws[a].s = Object.assign({}, ws[a].s, styleFn(r, c));
+    }
+  }
+}
+
+// шапка таблицы + границы по всем данным — используется на всех трёх листах
+function xlFormatTable(ws, headerRow, firstDataRow, lastDataRow, lastCol) {
+  xlStyleRange(ws, headerRow, 0, headerRow, lastCol, () => ({
+    font: { bold: true, sz: 10, color: { rgb: "FFFFFF" }, name: "Arial" },
+    fill: { patternType: "solid", fgColor: { rgb: XL_NAVY } },
+    alignment: { horizontal: "center", vertical: "center", wrapText: true },
+    border: XL_BOX,
+  }));
+  if (lastDataRow >= firstDataRow) {
+    xlStyleRange(ws, firstDataRow, 0, lastDataRow, lastCol, (r) => ({
+      font: { sz: 10, name: "Arial" },
+      alignment: { vertical: "center" },
+      border: XL_BOX,
+      fill: (r - firstDataRow) % 2 === 1
+        ? { patternType: "solid", fgColor: { rgb: "F7F8FA" } }
+        : undefined,
+    }));
+  }
+}
+
 function exportRegistryExcel(list) {
   if (typeof XLSX === "undefined") {
     alert("Не удалось загрузить модуль Excel — нужен интернет.");
@@ -986,36 +1030,119 @@ function exportRegistryExcel(list) {
 
   const sorted = list.slice().sort((a, b) => (a.ttnDate || "").localeCompare(b.ttnDate || ""));
   const periodLabel = (docsFilterFrom || docsFilterTo)
-    ? `${docsFilterFrom ? fmtRU(parseISO(docsFilterFrom)) : "начало"} — ${docsFilterTo ? fmtRU(parseISO(docsFilterTo)) : "сегодня"}`
+    ? `${docsFilterFrom ? fmtRU(parseISO(docsFilterFrom)) : "начало"} — ${docsFilterTo ? fmtRU(parseISO(docsFilterTo)) : fmtRU(new Date())}`
     : "весь период";
 
-  // ---------- Лист 1: построчный реестр ----------
-  const rows = [
-    ["РЕЕСТР ПЕРЕВОЗОК"],
-    ["Период:", periodLabel],
-    ["Выгружено:", fmtRU(new Date())],
-    [],
-    ["№", "Дата рейса", "№ ТТН", "Машина", "Гос. номер", "Водитель", "Вес груза, т"],
-  ];
   let totalTons = 0;
+  sorted.forEach((d) => { totalTons += Number(d.weight) || 0; });
+  totalTons = Math.round(totalTons * 100) / 100;
+
+  // ---------------- Лист 1: РЕЕСТР ----------------
+  const aoa = [];
+  aoa.push(["РЕЕСТР ПЕРЕВОЗОК", "", "", "", "", "", ""]);                              // 0
+  aoa.push(["Перевозка железной руды · п. Досатуй, Забайкальский край", "", "", "", "", "", ""]); // 1
+  aoa.push([`Период: ${periodLabel}`, "", "", "", "", "", ""]);                        // 2
+  aoa.push(["", "", "", "", "", "", ""]);                                              // 3
+  const HEADER_ROW = 4;
+  aoa.push(["№", "Дата рейса", "№ ТТН", "Машина", "Гос. номер", "Водитель", "Вес груза, т"]);
+  const FIRST_DATA = HEADER_ROW + 1;
   sorted.forEach((d, i) => {
-    const tons = Number(d.weight) || 0;
-    totalTons += tons;
-    rows.push([
+    aoa.push([
       i + 1,
       d.ttnDate ? fmtRU(parseISO(d.ttnDate)) : "",
       d.ttnNumber || "",
       d.truck || "",
       truckPlate(d.truck),
       d.driverName || "",
-      tons || "",
+      Number(d.weight) || 0,
     ]);
   });
-  rows.push([]);
-  rows.push(["", "", "", "", "", "ИТОГО рейсов:", sorted.length]);
-  rows.push(["", "", "", "", "", "ИТОГО тонн:", Math.round(totalTons * 100) / 100]);
+  const LAST_DATA = HEADER_ROW + sorted.length;
+  const TOTAL_ROW = LAST_DATA + 1;
+  aoa.push([`ИТОГО по реестру: ${sorted.length} рейс${pluralTrip(sorted.length)}`, "", "", "", "", "", totalTons]);
 
-  // ---------- Лист 2: свод по машинам ----------
+  aoa.push(["", "", "", "", "", "", ""]);
+  aoa.push(["", "", "", "", "", "", ""]);
+  const SIG_ROW = TOTAL_ROW + 3;
+  aoa.push(["Директор ООО ГК «Крона»", "", "", "", "", "Мандров Сергей Николаевич", ""]);
+  aoa.push(["", "", "", "(подпись)", "", "(расшифровка подписи)", ""]);
+  aoa.push(["", "", "", "", "", "", ""]);
+  aoa.push(["М.П.", "", "", "", "", "", ""]);
+
+  const ws1 = XLSX.utils.aoa_to_sheet(aoa);
+  ws1["!cols"] = [{ wch: 5 }, { wch: 13 }, { wch: 14 }, { wch: 20 }, { wch: 14 }, { wch: 28 }, { wch: 13 }];
+  ws1["!rows"] = [{ hpt: 24 }, { hpt: 15 }, { hpt: 15 }, { hpt: 6 }, { hpt: 30 }];
+  ws1["!merges"] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } },
+    { s: { r: 2, c: 0 }, e: { r: 2, c: 6 } },
+    { s: { r: TOTAL_ROW, c: 0 }, e: { r: TOTAL_ROW, c: 5 } },
+    { s: { r: SIG_ROW, c: 0 }, e: { r: SIG_ROW, c: 2 } },
+    { s: { r: SIG_ROW, c: 3 }, e: { r: SIG_ROW, c: 4 } },
+    { s: { r: SIG_ROW, c: 5 }, e: { r: SIG_ROW, c: 6 } },
+    { s: { r: SIG_ROW + 1, c: 3 }, e: { r: SIG_ROW + 1, c: 4 } },
+    { s: { r: SIG_ROW + 1, c: 5 }, e: { r: SIG_ROW + 1, c: 6 } },
+  ];
+
+  // заголовок документа
+  xlStyleRange(ws1, 0, 0, 0, 6, () => ({
+    font: { bold: true, sz: 16, name: "Arial", color: { rgb: XL_NAVY } },
+    alignment: { horizontal: "center", vertical: "center" },
+  }));
+  xlStyleRange(ws1, 1, 0, 1, 6, () => ({
+    font: { sz: 10, italic: true, name: "Arial", color: { rgb: "64748B" } },
+    alignment: { horizontal: "center" },
+  }));
+  xlStyleRange(ws1, 2, 0, 2, 6, () => ({
+    font: { sz: 11, bold: true, name: "Arial", color: { rgb: "1F2937" } },
+    alignment: { horizontal: "center" },
+  }));
+
+  xlFormatTable(ws1, HEADER_ROW, FIRST_DATA, LAST_DATA, 6);
+
+  // выравнивание по колонкам + формат веса
+  for (let r = FIRST_DATA; r <= LAST_DATA; r++) {
+    [0, 1, 2, 4].forEach((c) => {
+      const a = XLSX.utils.encode_cell({ r: r, c: c });
+      if (ws1[a]) ws1[a].s = Object.assign({}, ws1[a].s, { alignment: { horizontal: "center", vertical: "center" } });
+    });
+    const wA = XLSX.utils.encode_cell({ r: r, c: 6 });
+    if (ws1[wA]) ws1[wA].s = Object.assign({}, ws1[wA].s, {
+      numFmt: "0.00", alignment: { horizontal: "right", vertical: "center" },
+    });
+  }
+
+  // строка ИТОГО
+  xlStyleRange(ws1, TOTAL_ROW, 0, TOTAL_ROW, 6, () => ({
+    font: { bold: true, sz: 11, name: "Arial", color: { rgb: XL_NAVY } },
+    fill: { patternType: "solid", fgColor: { rgb: "EEF0F3" } },
+    border: { top: { style: "medium", color: { rgb: XL_NAVY } }, bottom: XL_BRD, left: XL_BRD, right: XL_BRD },
+    alignment: { vertical: "center" },
+  }));
+  const totA = XLSX.utils.encode_cell({ r: TOTAL_ROW, c: 6 });
+  if (ws1[totA]) ws1[totA].s = Object.assign({}, ws1[totA].s, {
+    numFmt: "0.00", alignment: { horizontal: "right", vertical: "center" },
+  });
+
+  // блок подписи
+  xlStyleRange(ws1, SIG_ROW, 0, SIG_ROW, 2, () => ({
+    font: { bold: true, sz: 11, name: "Arial" },
+    alignment: { vertical: "bottom" },
+  }));
+  xlStyleRange(ws1, SIG_ROW, 3, SIG_ROW, 6, () => ({
+    font: { sz: 11, name: "Arial" },
+    alignment: { horizontal: "center", vertical: "bottom" },
+    border: { bottom: { style: "thin", color: { rgb: "1F2937" } } },
+  }));
+  xlStyleRange(ws1, SIG_ROW + 1, 3, SIG_ROW + 1, 6, () => ({
+    font: { sz: 8, italic: true, name: "Arial", color: { rgb: "94A3B8" } },
+    alignment: { horizontal: "center", vertical: "top" },
+  }));
+  xlStyleRange(ws1, SIG_ROW + 3, 0, SIG_ROW + 3, 0, () => ({
+    font: { sz: 10, name: "Arial", color: { rgb: "64748B" } },
+  }));
+
+  // ---------------- Лист 2: по машинам ----------------
   const byTruck = {};
   sorted.forEach((d) => {
     const key = d.truck || "— не указана —";
@@ -1023,20 +1150,34 @@ function exportRegistryExcel(list) {
     byTruck[key].trips += 1;
     byTruck[key].tons += Number(d.weight) || 0;
   });
-  const truckRows = [["СВОД ПО МАШИНАМ"], ["Период:", periodLabel], [],
-                     ["Машина", "Гос. номер", "Рейсов", "Тонн", "Средний вес рейса, т"]];
-  Object.keys(byTruck).sort((a, b) => a.localeCompare(b, "ru")).forEach((name) => {
+  const tAoa = [["СВОД ПО МАШИНАМ", "", "", "", ""], [`Период: ${periodLabel}`, "", "", "", ""], ["", "", "", "", ""],
+                ["Машина", "Гос. номер", "Рейсов", "Тонн", "Средний вес рейса, т"]];
+  const tNames = Object.keys(byTruck).sort((a, b) => a.localeCompare(b, "ru"));
+  tNames.forEach((name) => {
     const t = byTruck[name];
-    truckRows.push([
-      name, truckPlate(name), t.trips,
-      Math.round(t.tons * 100) / 100,
-      t.trips ? Math.round((t.tons / t.trips) * 100) / 100 : 0,
-    ]);
+    tAoa.push([name, truckPlate(name), t.trips,
+               Math.round(t.tons * 100) / 100,
+               t.trips ? Math.round((t.tons / t.trips) * 100) / 100 : 0]);
   });
-  truckRows.push([]);
-  truckRows.push(["ИТОГО", "", sorted.length, Math.round(totalTons * 100) / 100, ""]);
+  const tTotalRow = 4 + tNames.length;
+  tAoa.push(["ИТОГО", "", sorted.length, totalTons, ""]);
+  const ws2 = XLSX.utils.aoa_to_sheet(tAoa);
+  ws2["!cols"] = [{ wch: 22 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 22 }];
+  ws2["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } }];
+  xlStyleRange(ws2, 0, 0, 0, 4, () => ({
+    font: { bold: true, sz: 14, name: "Arial", color: { rgb: XL_NAVY } },
+    alignment: { horizontal: "center" },
+  }));
+  xlStyleRange(ws2, 1, 0, 1, 4, () => ({
+    font: { sz: 10, name: "Arial", color: { rgb: "64748B" } }, alignment: { horizontal: "center" },
+  }));
+  xlFormatTable(ws2, 3, 4, tTotalRow - 1, 4);
+  xlStyleRange(ws2, tTotalRow, 0, tTotalRow, 4, () => ({
+    font: { bold: true, sz: 11, name: "Arial", color: { rgb: XL_NAVY } },
+    fill: { patternType: "solid", fgColor: { rgb: "EEF0F3" } }, border: XL_BOX,
+  }));
 
-  // ---------- Лист 3: свод по водителям ----------
+  // ---------------- Лист 3: по водителям ----------------
   const byDriver = {};
   sorted.forEach((d) => {
     const key = d.driverName || "— не указан —";
@@ -1044,28 +1185,36 @@ function exportRegistryExcel(list) {
     byDriver[key].trips += 1;
     byDriver[key].tons += Number(d.weight) || 0;
   });
-  const driverRows = [["СВОД ПО ВОДИТЕЛЯМ"], ["Период:", periodLabel], [],
-                      ["Водитель", "Рейсов", "Тонн", "Средний вес рейса, т"]];
-  Object.keys(byDriver).sort((a, b) => a.localeCompare(b, "ru")).forEach((name) => {
+  const dAoa = [["СВОД ПО ВОДИТЕЛЯМ", "", "", ""], [`Период: ${periodLabel}`, "", "", ""], ["", "", "", ""],
+                ["Водитель", "Рейсов", "Тонн", "Средний вес рейса, т"]];
+  const dNames = Object.keys(byDriver).sort((a, b) => a.localeCompare(b, "ru"));
+  dNames.forEach((name) => {
     const t = byDriver[name];
-    driverRows.push([
-      name, t.trips,
-      Math.round(t.tons * 100) / 100,
-      t.trips ? Math.round((t.tons / t.trips) * 100) / 100 : 0,
-    ]);
+    dAoa.push([name, t.trips,
+               Math.round(t.tons * 100) / 100,
+               t.trips ? Math.round((t.tons / t.trips) * 100) / 100 : 0]);
   });
-  driverRows.push([]);
-  driverRows.push(["ИТОГО", sorted.length, Math.round(totalTons * 100) / 100, ""]);
+  const dTotalRow = 4 + dNames.length;
+  dAoa.push(["ИТОГО", sorted.length, totalTons, ""]);
+  const ws3 = XLSX.utils.aoa_to_sheet(dAoa);
+  ws3["!cols"] = [{ wch: 30 }, { wch: 10 }, { wch: 12 }, { wch: 22 }];
+  ws3["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } }];
+  xlStyleRange(ws3, 0, 0, 0, 3, () => ({
+    font: { bold: true, sz: 14, name: "Arial", color: { rgb: XL_NAVY } },
+    alignment: { horizontal: "center" },
+  }));
+  xlStyleRange(ws3, 1, 0, 1, 3, () => ({
+    font: { sz: 10, name: "Arial", color: { rgb: "64748B" } }, alignment: { horizontal: "center" },
+  }));
+  xlFormatTable(ws3, 3, 4, dTotalRow - 1, 3);
+  xlStyleRange(ws3, dTotalRow, 0, dTotalRow, 3, () => ({
+    font: { bold: true, sz: 11, name: "Arial", color: { rgb: XL_NAVY } },
+    fill: { patternType: "solid", fgColor: { rgb: "EEF0F3" } }, border: XL_BOX,
+  }));
 
   const wb = XLSX.utils.book_new();
-  const ws1 = XLSX.utils.aoa_to_sheet(rows);
-  ws1["!cols"] = [{ wch: 5 }, { wch: 13 }, { wch: 14 }, { wch: 18 }, { wch: 14 }, { wch: 26 }, { wch: 13 }];
   XLSX.utils.book_append_sheet(wb, ws1, "Реестр");
-  const ws2 = XLSX.utils.aoa_to_sheet(truckRows);
-  ws2["!cols"] = [{ wch: 20 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 20 }];
   XLSX.utils.book_append_sheet(wb, ws2, "По машинам");
-  const ws3 = XLSX.utils.aoa_to_sheet(driverRows);
-  ws3["!cols"] = [{ wch: 28 }, { wch: 10 }, { wch: 12 }, { wch: 20 }];
   XLSX.utils.book_append_sheet(wb, ws3, "По водителям");
 
   const fileTag = (docsFilterFrom || docsFilterTo)
