@@ -136,3 +136,73 @@ exports.dailySummary = onSchedule(
     await pruneInvalidTokens(usersSnap, tokens, response.responses);
   }
 );
+
+// ============================================================
+// ПРИЛОЖЕНИЕ «СМЕНА» (водители техники, Новосибирск) — push чата.
+// Отдельная коллекция сообщений (nskChat) и отдельные адреса
+// устройств (nskPush), чтобы бригады Досатуя и Новосибирска не
+// получали уведомления друг друга.
+// ============================================================
+
+// те же два email, что в Табеле и в правилах Firestore
+const NSK_MANAGER_EMAILS = ["letiushev.a.a@gmail.com", "mandrow@yandex.ru"];
+const NSK_APP_URL = "https://yamanochy.github.io/Smena/";
+
+// кому сейчас положено получать уведомления: водители с действующим
+// доступом и руководители. Тому, у кого доступ отключили, чат больше
+// не приходит, даже если адрес его телефона остался в базе.
+async function nskMemberUids() {
+  const uids = new Set();
+  const accessSnap = await admin.firestore().collection("nskAccess").where("active", "==", true).get();
+  accessSnap.forEach((doc) => uids.add(doc.id));
+  const found = await admin.auth().getUsers(NSK_MANAGER_EMAILS.map((email) => ({ email })));
+  found.users.forEach((u) => uids.add(u.uid));
+  return uids;
+}
+
+exports.nskChatPush = onDocumentCreated("nskChat/{msgId}", async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+  const msg = snap.data();
+
+  const [members, pushSnap] = await Promise.all([
+    nskMemberUids(),
+    admin.firestore().collection("nskPush").get(),
+  ]);
+  const tokens = [];
+  const owners = []; // чей это адрес — чтобы убрать его, если он устарел
+  pushSnap.forEach((doc) => {
+    if (doc.id === msg.senderUid) return; // не слать самому себе
+    if (!members.has(doc.id)) return;
+    const list = doc.data().tokens;
+    if (Array.isArray(list)) list.forEach((t) => { tokens.push(t); owners.push(doc.ref); });
+  });
+  if (!tokens.length) return;
+
+  const text = msg.text || (msg.imageUrl ? "Фото" : "");
+  const bodyText = text.length > 100 ? text.slice(0, 100) + "…" : text;
+
+  const response = await admin.messaging().sendEachForMulticast({
+    tokens,
+    // только data, без notification — иначе браузер покажет уведомление
+    // второй раз, вдобавок к тому, что показывает sw.js приложения
+    data: {
+      title: `${msg.senderName || "Сообщение"} · Смена`,
+      body: bodyText,
+    },
+    webpush: {
+      fcmOptions: { link: NSK_APP_URL },
+    },
+  });
+
+  // адреса, которые Google отклонил (приложение удалили, уведомления выключили)
+  const batch = admin.firestore().batch();
+  let stale = 0;
+  response.responses.forEach((r, i) => {
+    if (!r.success && r.error && r.error.code === "messaging/registration-token-not-registered") {
+      batch.update(owners[i], { tokens: admin.firestore.FieldValue.arrayRemove(tokens[i]) });
+      stale++;
+    }
+  });
+  if (stale) await batch.commit();
+});

@@ -83,7 +83,7 @@ self.addEventListener("notificationclick", (e) => {
   );
 });
 
-const VERSION = "vahta-v42";
+const VERSION = "vahta-v43";
 
 // Свои файлы — без них приложение офлайн не запустится вообще.
 // Если хоть один не скачался, установка ДОЛЖНА провалиться, чтобы
@@ -143,7 +143,10 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)))
+      // ВАЖНО: чистим только СВОИ старые кэши (vahta-…). Хранилище кэшей общее
+      // на весь адрес сайта; раньше здесь удалялось «всё, кроме текущего» — и на
+      // телефоне, где стоят ещё Табель или «Смена», стирались их офлайн-копии.
+      Promise.all(keys.filter((k) => k.startsWith("vahta-") && k !== VERSION).map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
