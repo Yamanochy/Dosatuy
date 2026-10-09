@@ -131,39 +131,80 @@ function renderTimesheet() {
 }
 
 // ---------- экспорт табеля в Excel ----------
+// Оформление то же, что у реестра перевозок (вкладка «ТТН»): заголовок,
+// тёмная шапка, границы, строка ИТОГО. Общий файл оформления — xl-sheet.js.
 function exportTimesheetToExcel(perDriver, visibleNames, year, month) {
-  if (typeof XLSX === "undefined") {
+  if (typeof XLSX === "undefined" || typeof xlBuildSheet !== "function") {
     alert("Не удалось загрузить модуль Excel — проверь подключение к интернету и попробуй ещё раз.");
     return;
   }
-  const summaryRows = [["ФИО", "Смен", "Оплата за смены, ₽", "ТО/ремонт", "Оплата за ТО/ремонт, ₽", "Итого, ₽"]];
-  visibleNames.forEach((name) => {
-    const r = perDriver[name];
-    summaryRows.push([name, r.shifts.length, r.shiftPay, r.maint.length, r.maintPay, r.shiftPay + r.maintPay]);
+  const monthLine = `Месяц: ${MONTHS_RU[month]} ${year}`;
+  const subtitle = "Перевозка железной руды · п. Досатуй, Забайкальский край";
+  const money = { align: "right", numFmt: "#,##0" };
+  const count = { align: "center" };
+  const sum = (pick) => visibleNames.reduce((s, n) => s + pick(perDriver[n]), 0);
+
+  // ---- лист 1: сводный табель ----
+  const ws1 = xlBuildSheet({
+    title: "ТАБЕЛЬ",
+    subtitle,
+    lines: [monthLine],
+    columns: [
+      { title: "№", width: 5, align: "center" },
+      { title: "ФИО", width: 32, wrap: true },
+      { title: "Смен", width: 9, ...count },
+      { title: "Оплата за смены, ₽", width: 17, ...money },
+      { title: "ТО / ремонт", width: 11, ...count },
+      { title: "Оплата за ТО / ремонт, ₽", width: 17, ...money },
+      { title: "Итого, ₽", width: 15, ...money },
+    ],
+    rows: visibleNames.map((name, i) => {
+      const r = perDriver[name];
+      return [i + 1, name, r.shifts.length, r.shiftPay, r.maint.length, r.maintPay, r.shiftPay + r.maintPay];
+    }),
+    total: {
+      label: `ИТОГО: ${visibleNames.length} чел.`, span: 2,
+      values: {
+        2: sum((r) => r.shifts.length), 3: sum((r) => r.shiftPay),
+        4: sum((r) => r.maint.length), 5: sum((r) => r.maintPay),
+        6: sum((r) => r.shiftPay + r.maintPay),
+      },
+    },
   });
 
-  const detailHeader = ["Дата", "ФИО", "Тип", "Номер / машина", "Сумма, ₽"];
-  const detailRows = [];
+  // ---- лист 2: детализация по датам ----
+  const detail = [];
   visibleNames.forEach((name) => {
     const r = perDriver[name];
     r.shifts.forEach((d) => {
-      detailRows.push([d.ttnDate, name, "Смена", `ТТН № ${d.ttnNumber} · ${d.truck || ""}`, 6000]);
+      detail.push([d.ttnDate || "", name, "Смена", `ТТН № ${d.ttnNumber} · ${d.truck || ""}`, 6000]);
     });
     r.maint.forEach((m) => {
       const workers = [m.primaryWorker, m.secondaryWorker].filter(Boolean);
       const share = maintShare(m, workers.length);
       const typeLabel = m.type === "Ремонт" ? (m.repairTypeName || "Ремонт") : "ТО";
-      detailRows.push([m.date, name, typeLabel, m.truck || "", share]);
+      detail.push([m.date || "", name, typeLabel, m.truck || "", share]);
     });
   });
-  detailRows.sort((a, b) => (a[0] || "").localeCompare(b[0] || ""));
-  detailRows.unshift(detailHeader);
+  detail.sort((a, b) => (a[0] || "").localeCompare(b[0] || "") || a[1].localeCompare(b[1], "ru"));
+  const ws2 = xlBuildSheet({
+    title: "ДЕТАЛИЗАЦИЯ ТАБЕЛЯ",
+    subtitle,
+    lines: [monthLine],
+    columns: [
+      { title: "№", width: 5, align: "center" },
+      { title: "Дата", width: 12, align: "center" },
+      { title: "ФИО", width: 32, wrap: true },
+      { title: "Тип", width: 18, wrap: true },
+      { title: "Номер / машина", width: 30, wrap: true },
+      { title: "Сумма, ₽", width: 14, ...money },
+    ],
+    rows: detail.map((row, i) => [i + 1, row[0] ? fmtRU(parseISO(row[0])) : "", row[1], row[2], row[3], row[4]]),
+    total: { label: `ИТОГО: ${detail.length} зап.`, span: 5, values: { 5: detail.reduce((s, row) => s + row[4], 0) } },
+  });
 
   const wb = XLSX.utils.book_new();
-  const ws1 = XLSX.utils.aoa_to_sheet(summaryRows);
-  XLSX.utils.book_append_sheet(wb, ws1, "Табель");
-  const ws2 = XLSX.utils.aoa_to_sheet(detailRows);
-  XLSX.utils.book_append_sheet(wb, ws2, "Детализация");
-
-  XLSX.writeFile(wb, `Табель_Досатуй_${MONTHS_RU[month]}_${year}.xlsx`);
+  xlAppendSheet(wb, ws1, "Табель");
+  xlAppendSheet(wb, ws2, "Детализация");
+  xlSaveFile(wb, `Табель_Досатуй_${MONTHS_RU[month]}_${year}.xlsx`);
 }
