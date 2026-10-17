@@ -66,7 +66,7 @@ function renderStatistics() {
         const medal = `<span class="font-num text-slate-400">${i + 1}.</span>`;
         const isMe = nameKey(e.name) === nameKey(currentProfile?.name);
         const row = el("div", "flex items-center justify-between text-sm");
-        row.innerHTML = `<span class="${isMe ? "text-diesel font-bold" : "text-slate-700"}">${medal} ${escapeHtml(e.name)}${isMe ? ` <span class="text-[10px] font-num bg-route/20 text-route-600 px-1.5 py-0.5 rounded align-middle">ТЫ</span>` : ""}</span><span class="font-semibold ${isMe ? "text-diesel" : "text-slate-500"}">${e.trips} рейс${pluralShift(e.trips)}</span>`;
+        row.innerHTML = `<span class="${isMe ? "text-diesel font-bold" : "text-slate-700"}">${medal} ${escapeHtml(e.name)}${isMe ? ` <span class="text-[10px] font-num bg-route/20 text-route-600 px-1.5 py-0.5 rounded align-middle">ТЫ</span>` : ""}</span><span class="font-semibold ${isMe ? "text-diesel" : "text-slate-500"}">${e.trips} рейс${pluralTrip(e.trips)}</span>`;
         list.appendChild(row);
       });
       topCard.appendChild(list);
