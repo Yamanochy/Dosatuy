@@ -33,14 +33,19 @@ let maintSelectedFiles = [];
 let maintFilterFrom = "";
 let maintFilterTo = "";
 let maintShowArchive = false;
+// правка существующей записи ТО/ремонта (только руководитель):
+// id записи, новые фото и список уже загруженных фото, которые оставляем
+let maintEditId = null;
+let maintEditFiles = [];
+let maintEditPhotos = [];
 
 function subscribeMaintenance() {
   if (maintenanceUnsub) return;
   maintenanceUnsub = db.collection("maintenanceDocs").orderBy("uploadedAt", "desc")
     .onSnapshot((snap) => {
       maintenanceCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      // не сносим форму, если человек как раз сейчас её заполняет
-      if (currentTab === "documents" && docsMode === "maintenance" && !maintFormOpen) renderDocuments();
+      // не сносим форму, если человек как раз сейчас её заполняет или правит запись
+      if (currentTab === "documents" && docsMode === "maintenance" && !maintFormOpen && !maintEditId) renderDocuments();
     }, (err) => { console.error(err); });
 }
 
@@ -474,11 +479,20 @@ function renderAddForm() {
 // РЕЖИМ: ТО / Ремонт
 // ============================================================
 function renderMaintenanceSection(wrap) {
-  const addBtn = el("button", "w-full py-3 rounded-xl bg-diesel-700 text-white font-semibold shadow-sm flex items-center justify-center gap-2", `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span>Добавить ТО / ремонт</span>`);
-  addBtn.onclick = () => { maintFormOpen = true; maintSelectedFiles = []; render(); };
-  wrap.appendChild(addBtn);
+  // если правимая запись исчезла (удалили с другого устройства) — выходим из правки
+  const editDoc = maintEditId ? maintenanceCache.find((d) => d.id === maintEditId) : null;
+  if (maintEditId && !editDoc) { maintEditId = null; maintEditFiles = []; maintEditPhotos = []; }
 
-  if (maintFormOpen) wrap.appendChild(renderMaintenanceAddForm());
+  if (editDoc) {
+    // пока правим запись, кнопку «добавить» и вторую форму не показываем
+    wrap.appendChild(renderMaintenanceEditForm(editDoc));
+  } else {
+    const addBtn = el("button", "w-full py-3 rounded-xl bg-diesel-700 text-white font-semibold shadow-sm flex items-center justify-center gap-2", `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span>Добавить ТО / ремонт</span>`);
+    addBtn.onclick = () => { maintFormOpen = true; maintSelectedFiles = []; render(); };
+    wrap.appendChild(addBtn);
+
+    if (maintFormOpen) wrap.appendChild(renderMaintenanceAddForm());
+  }
 
   const { current, archived } = splitCurrentArchive(maintenanceCache);
 
@@ -550,16 +564,38 @@ function renderMaintenanceSection(wrap) {
       <div class="text-slate-600 text-xs"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg>${escapeHtml(workers.join(" + ") || "—")}</div>
       ${doc.note ? `<div class="text-slate-500 text-xs mt-0.5"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>${escapeHtml(doc.note)}</div>` : ""}
       <div class="text-shift text-xs font-semibold font-num"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-0.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5a2.5 2.5 0 0 1 2.5-1.5h.5a2 2 0 0 1 0 4h-1a2 2 0 0 0 0 4h.5a2.5 2.5 0 0 0 2.5-1.5"/></svg>${share.toLocaleString("ru-RU")} ₽ ${workers.length === 2 ? "каждому" : ""}</div>
-      <div class="text-slate-300 text-[10px] mt-1">добавил(а): ${escapeHtml(doc.uploadedByName || "")}</div>`;
+      <div class="text-slate-300 text-[10px] mt-1">добавил(а): ${escapeHtml(doc.uploadedByName || "")}</div>
+      ${doc.managerEdited ? `<div class="text-route text-[10px]"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-0.5"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>исправил(а): ${escapeHtml(doc.editedByName || "руководитель")}</div>` : ""}`;
     card.appendChild(info);
 
-    const canDelete = currentUser && (doc.uploadedByUid === currentUser.uid || currentProfile?.role === "manager");
-    if (canDelete) {
-      const del = el("button", "text-slate-300 hover:text-rose-500 shrink-0 self-start", "✕");
-      del.onclick = () => {
-        if (confirm("Удалить эту запись?")) db.collection("maintenanceDocs").doc(doc.id).delete();
-      };
-      card.appendChild(del);
+    const isManager = currentProfile?.role === "manager";
+    const canDelete = currentUser && (doc.uploadedByUid === currentUser.uid || isManager);
+    if (isManager || canDelete) {
+      const btnCol = el("div", "shrink-0 self-start flex flex-col items-center gap-2");
+      // править может только руководитель: запись о ТО/ремонте — это деньги,
+      // и после правки она помечается, чтобы было видно, что сумма менялась
+      if (isManager) {
+        const edit = el("button", "text-slate-300 hover:text-diesel", `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>`);
+        edit.title = "Исправить запись";
+        edit.onclick = () => {
+          maintEditId = doc.id;
+          maintEditFiles = [];
+          maintEditPhotos = (doc.photoUrls || []).slice();
+          maintFormOpen = false;
+          render();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        };
+        btnCol.appendChild(edit);
+      }
+      if (canDelete) {
+        const del = el("button", "text-slate-300 hover:text-rose-500", "✕");
+        del.title = "Удалить запись";
+        del.onclick = () => {
+          if (confirm("Удалить эту запись?")) db.collection("maintenanceDocs").doc(doc.id).delete();
+        };
+        btnCol.appendChild(del);
+      }
+      card.appendChild(btnCol);
     }
 
     wrap.appendChild(card);
@@ -793,6 +829,265 @@ function renderMaintenanceAddForm() {
         saveBtn.disabled = false;
         saveBtn.textContent = "Сохранить";
       }
+    }
+  };
+
+  return card;
+}
+
+// ---------- правка существующей записи ТО/ремонта (руководитель) ----------
+// Отличия от формы добавления:
+//   • поля заполнены тем, что уже лежит в записи;
+//   • сумма за работу видна и её можно поправить руками — она пересчитывается
+//     автоматически только если ПЕРЕКЛЮЧИТЬ вид ремонта; иначе остаётся та,
+//     что заморожена в записи (иначе простое открытие и сохранение записи
+//     задним числом переоценило бы её по новой цене из Настроек);
+//   • уже загруженные фото можно убрать, а новые — добавить;
+//   • кто добавил запись и когда — не меняется, иначе запись переехала бы
+//     между «Текущими» и «Архивом»; правка отмечается отдельно.
+function renderMaintenanceEditForm(doc) {
+  const card = el("div", "bg-white rounded-xl border-2 border-route p-4 space-y-3");
+  const driverNames = [...new Set(STATE.drivers.map((d) => d.name).filter(Boolean))];
+  // водителя, которого уже нет в Настройках, всё равно показываем в списке —
+  // иначе при правке он молча заменился бы на другого человека
+  [doc.primaryWorker, doc.secondaryWorker].filter(Boolean).forEach((w) => {
+    if (!driverNames.some((n) => n === w)) driverNames.push(w);
+  });
+  driverNames.sort((a, b) => a.localeCompare(b, "ru"));
+
+  const isRepair = doc.type === "Ремонт";
+  const storedName = doc.repairTypeName || "";
+  const storedPay = maintBasePay(doc);
+  const known = STATE.repairTypes.find((r) => r.name === storedName);
+  const trucks = STATE.trucks.slice();
+  if (doc.truck && !trucks.includes(doc.truck)) trucks.push(doc.truck);
+
+  const opt = (v, label, sel, price, name) =>
+    `<option value="${v}" ${price !== undefined ? `data-price="${price}"` : ""} ${name !== undefined ? `data-name="${escapeHtml(name)}"` : ""} ${sel ? "selected" : ""}>${escapeHtml(label)}</option>`;
+
+  card.innerHTML = `
+    <div class="flex items-center justify-between">
+      <div class="font-bold text-slate-700">Исправить запись — ТО / ремонт</div>
+      <div class="text-[10px] text-slate-400 text-right shrink-0 pl-2">добавил(а)<br>${escapeHtml(doc.uploadedByName || "—")}</div>
+    </div>
+    <label class="block text-xs text-slate-500">Дата
+      <input id="me-date" type="date" value="${doc.date || ""}" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm" />
+    </label>
+    <label class="block text-xs text-slate-500">Машина
+      <select id="me-truck" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
+        ${trucks.map((t) => opt(escapeHtml(t), t, t === doc.truck)).join("")}
+      </select>
+    </label>
+    <label class="block text-xs text-slate-500">Что делали
+      <select id="me-type" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
+        ${opt("ТО", "ТО (техобслуживание)", !isRepair)}
+        ${opt("Ремонт", "Ремонт", isRepair)}
+      </select>
+    </label>
+    <label id="me-repair-type-wrap" class="block text-xs text-slate-500 ${isRepair ? "" : "hidden"}">Вид ремонта
+      <select id="me-repair-type" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
+        ${!known ? opt("__keep", storedName ? `${storedName} — ${storedPay.toLocaleString("ru-RU")} ₽ (как было)` : `Оставить как было — ${storedPay.toLocaleString("ru-RU")} ₽`, isRepair, storedPay, storedName) : ""}
+        ${known ? "" : opt("", "Выбрать вид ремонта из Настроек", false)}
+        ${STATE.repairTypes.map((r) => opt(r.id, `${r.name} — ${r.price.toLocaleString("ru-RU")} ₽`, isRepair && known && known.id === r.id, r.price, r.name)).join("")}
+      </select>
+    </label>
+    <label class="block text-xs text-slate-500">Кто делал (основной)
+      <select id="me-worker1" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
+        ${opt("", "Выбери водителя", !doc.primaryWorker)}
+        ${driverNames.map((n) => opt(escapeHtml(n), n, n === doc.primaryWorker)).join("")}
+      </select>
+    </label>
+    <label class="block text-xs text-slate-500">Напарник (если делали вдвоём)
+      <select id="me-worker2" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
+        ${opt("", "Нет — делал один", !doc.secondaryWorker)}
+        ${driverNames.map((n) => opt(escapeHtml(n), n, n === doc.secondaryWorker)).join("")}
+      </select>
+    </label>
+    <label class="block text-xs text-slate-500">Сумма за работу, ₽
+      <input id="me-pay" type="number" inputmode="numeric" min="0" step="100" value="${storedPay}" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm font-num" />
+    </label>
+    <div id="me-pay-hint" class="text-xs text-slate-400"></div>
+    <label class="block text-xs text-slate-500">Что сделали (необязательно)
+      <textarea id="me-note" rows="2" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm resize-none">${escapeHtml(doc.note || "")}</textarea>
+    </label>
+    <div>
+      <div class="flex items-center justify-between mb-1">
+        <div class="text-xs text-slate-500">Фото</div>
+        <div id="me-photo-count" class="text-xs text-slate-400 font-medium">0 / ${MAX_PHOTOS}</div>
+      </div>
+      <div class="flex gap-2">
+        <button type="button" id="me-btn-camera" class="flex-1 py-2.5 rounded-lg bg-diesel-700 text-white text-sm font-semibold flex items-center justify-center gap-1.5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1.5"><path d="M4 8a2 2 0 0 1 2-2h1l1.5-2h7L17 6h1a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>Камера</button>
+        <button type="button" id="me-btn-gallery" class="flex-1 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-sm font-semibold flex items-center justify-center gap-1.5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>Галерея</button>
+      </div>
+      <input id="me-photo-camera" type="file" accept="image/*" capture="environment" class="hidden" />
+      <input id="me-photo-gallery" type="file" accept="image/*" multiple class="hidden" />
+      <div id="me-thumbs" class="grid grid-cols-3 gap-2 mt-2"></div>
+    </div>
+    <div id="me-error" class="text-xs text-rose-600 hidden"></div>
+    <div class="flex gap-2 pt-1">
+      <button id="me-save" class="flex-1 py-2.5 rounded-lg bg-diesel text-white font-semibold text-sm">Сохранить</button>
+      <button id="me-cancel" class="px-4 py-2.5 rounded-lg bg-slate-100 text-slate-500 font-semibold text-sm">Отмена</button>
+    </div>`;
+
+  const typeSelect = card.querySelector("#me-type");
+  const repairWrap = card.querySelector("#me-repair-type-wrap");
+  const repairSelect = card.querySelector("#me-repair-type");
+  const payInput = card.querySelector("#me-pay");
+  const payHint = card.querySelector("#me-pay-hint");
+  const worker1 = card.querySelector("#me-worker1");
+  const worker2 = card.querySelector("#me-worker2");
+
+  function updateHint() {
+    const base = Math.max(0, Math.round(Number(payInput.value) || 0));
+    const two = worker2.value && worker2.value !== worker1.value;
+    payHint.textContent = two
+      ? `Делали вдвоём — по ${Math.round(base / 2).toLocaleString("ru-RU")} ₽ каждому.`
+      : `Делал один — ${base.toLocaleString("ru-RU")} ₽ ему.`;
+  }
+  // сумму подставляем заново ТОЛЬКО когда сам переключил вид ремонта или тип
+  typeSelect.onchange = () => {
+    const repair = typeSelect.value === "Ремонт";
+    repairWrap.classList.toggle("hidden", !repair);
+    if (!repair) payInput.value = 6000;
+    else {
+      const o = repairSelect.selectedOptions[0];
+      if (o && o.dataset.price) payInput.value = Number(o.dataset.price);
+    }
+    updateHint();
+  };
+  repairSelect.onchange = () => {
+    const o = repairSelect.selectedOptions[0];
+    if (o && o.dataset.price) payInput.value = Number(o.dataset.price);
+    updateHint();
+  };
+  payInput.oninput = updateHint;
+  worker1.onchange = updateHint;
+  worker2.onchange = updateHint;
+  updateHint();
+
+  // ---- фото: уже загруженные (maintEditPhotos) + новые (maintEditFiles) ----
+  const camInput = card.querySelector("#me-photo-camera");
+  const galInput = card.querySelector("#me-photo-gallery");
+  const btnCam = card.querySelector("#me-btn-camera");
+  const btnGal = card.querySelector("#me-btn-gallery");
+  const countLabel = card.querySelector("#me-photo-count");
+  const thumbsWrap = card.querySelector("#me-thumbs");
+
+  function total() { return maintEditPhotos.length + maintEditFiles.length; }
+
+  function renderThumbs() {
+    countLabel.textContent = `${total()} / ${MAX_PHOTOS}`;
+    const atLimit = total() >= MAX_PHOTOS;
+    btnCam.disabled = atLimit;
+    btnGal.disabled = atLimit;
+    btnCam.classList.toggle("opacity-40", atLimit);
+    btnGal.classList.toggle("opacity-40", atLimit);
+
+    thumbsWrap.innerHTML = "";
+    maintEditPhotos.forEach((url, idx) => {
+      const box = el("div", "relative");
+      const img = el("img", "w-full h-20 object-cover rounded-lg bg-slate-50");
+      img.src = url;
+      box.appendChild(img);
+      const rm = el("button", "absolute -top-1.5 -right-1.5 bg-diesel text-white rounded-full w-5 h-5 text-xs flex items-center justify-center", "✕");
+      rm.type = "button";
+      rm.onclick = () => { maintEditPhotos.splice(idx, 1); renderThumbs(); };
+      box.appendChild(rm);
+      thumbsWrap.appendChild(box);
+    });
+    maintEditFiles.forEach((file, idx) => {
+      const box = el("div", "relative");
+      const img = el("img", "w-full h-20 object-cover rounded-lg bg-slate-50");
+      const reader = new FileReader();
+      reader.onload = (ev) => { img.src = ev.target.result; };
+      reader.readAsDataURL(file);
+      box.appendChild(img);
+      const tag = el("div", "absolute bottom-0.5 left-0.5 bg-shift text-white text-[9px] px-1 rounded", "новое");
+      box.appendChild(tag);
+      const rm = el("button", "absolute -top-1.5 -right-1.5 bg-diesel text-white rounded-full w-5 h-5 text-xs flex items-center justify-center", "✕");
+      rm.type = "button";
+      rm.onclick = () => { maintEditFiles.splice(idx, 1); renderThumbs(); };
+      box.appendChild(rm);
+      thumbsWrap.appendChild(box);
+    });
+  }
+  function addFiles(fileList) {
+    for (const f of fileList) {
+      if (total() >= MAX_PHOTOS) break;
+      maintEditFiles.push(f);
+    }
+    renderThumbs();
+  }
+  btnCam.onclick = () => { if (total() < MAX_PHOTOS) camInput.click(); };
+  btnGal.onclick = () => { if (total() < MAX_PHOTOS) galInput.click(); };
+  camInput.onchange = (e) => { addFiles(e.target.files); camInput.value = ""; };
+  galInput.onchange = (e) => { addFiles(e.target.files); galInput.value = ""; };
+  renderThumbs();
+
+  function closeEdit() {
+    maintEditId = null;
+    maintEditFiles = [];
+    maintEditPhotos = [];
+    render();
+  }
+  card.querySelector("#me-cancel").onclick = closeEdit;
+
+  card.querySelector("#me-save").onclick = async () => {
+    const errBox = card.querySelector("#me-error");
+    const saveBtn = card.querySelector("#me-save");
+    const fail = (msg) => {
+      errBox.textContent = msg;
+      errBox.classList.remove("hidden");
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Сохранить";
+    };
+
+    const date = card.querySelector("#me-date").value;
+    const truck = card.querySelector("#me-truck").value;
+    const type = typeSelect.value;
+    const primaryWorker = worker1.value;
+    const secondaryWorker = worker2.value === primaryWorker ? "" : worker2.value;
+    const note = card.querySelector("#me-note").value.trim();
+    const pay = Math.round(Number(payInput.value) || 0);
+
+    if (!date || !primaryWorker) return fail("Заполни дату и хотя бы одного исполнителя.");
+    if (!(pay > 0)) return fail("Сумма за работу должна быть больше нуля.");
+
+    let repairTypeName = null;
+    if (type === "Ремонт") {
+      const o = repairSelect.selectedOptions[0];
+      if (!o || !o.value) return fail("Выбери вид ремонта.");
+      repairTypeName = o.value === "__keep" ? (doc.repairTypeName || null) : (o.dataset.name || null);
+    }
+    // правка идёт прямо в базу: складывать её в офлайн-очередь нельзя —
+    // очередь умеет только добавлять новые записи, и правка потерялась бы
+    if (!navigator.onLine) return fail("Для правки нужен интернет — офлайн сохранить изменения не получится.");
+
+    errBox.classList.add("hidden");
+    saveBtn.disabled = true;
+
+    try {
+      const urls = maintEditPhotos.slice();
+      for (let i = 0; i < maintEditFiles.length; i++) {
+        saveBtn.textContent = `Загружаю фото ${i + 1}/${maintEditFiles.length}…`;
+        urls.push(await uploadToCloudinary(await resizeImage(maintEditFiles[i])));
+      }
+      saveBtn.textContent = "Сохраняю…";
+      // uploadedAt / uploadedByUid / uploadedByName НЕ трогаем:
+      // от uploadedAt зависит, лежит запись в «Текущих» или в «Архиве»
+      await db.collection("maintenanceDocs").doc(doc.id).update({
+        date, truck, type, primaryWorker, secondaryWorker, note,
+        repairTypeName,
+        repairPrice: pay,
+        managerEdited: true,
+        editedByUid: currentUser.uid,
+        editedByName: currentProfile.name,
+        editedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        photoUrls: urls,
+      });
+      closeEdit();
+    } catch (e) {
+      fail("Не получилось сохранить: " + e.message);
     }
   };
 

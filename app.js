@@ -69,7 +69,8 @@ function subscribeCloudSettings() {
       // не сносим открытую форму ТТН/ТО-ремонта тем же способом, что и в
       // offline-queue.js — на этот экран изменение настроек никак не влияет
       const formOpen = (typeof addFormOpen !== "undefined" && addFormOpen)
-        || (typeof maintFormOpen !== "undefined" && maintFormOpen);
+        || (typeof maintFormOpen !== "undefined" && maintFormOpen)
+        || (typeof maintEditId !== "undefined" && maintEditId);
       if (!formOpen) render();
     } else if (currentProfile?.role === "manager") {
       // документа в базе ещё нет — заводим его тем, что уже есть на этом
@@ -83,13 +84,14 @@ function saveCloudSettings(newState) {
 }
 
 // стоимость одной записи ТО/ремонта целиком (до деления между исполнителями).
-// ТО — всегда 6000 ₽. Ремонт — по виду ремонта из Настроек (repairPrice,
-// сохранённый в самой записи на момент её создания — так исторические
-// записи не "поедут", если руководитель потом поменяет цену вида ремонта).
-// Старые записи о ремонте, сделанные до появления видов ремонта — 6000 ₽,
-// как считалось раньше.
+// Сумма берётся из самой записи (repairPrice), если она там есть: у ремонта
+// она пишется при создании по виду ремонта из Настроек, а у любой записи её
+// может поправить руководитель. Так исторические записи не "поедут", если
+// потом поменять цену вида ремонта в Настройках.
+// Если в записи суммы нет — это ТО (всегда 6000 ₽) или старый ремонт,
+// сделанный до появления видов ремонта: тоже 6000 ₽, как считалось раньше.
 function maintBasePay(doc) {
-  if (doc.type === "Ремонт" && doc.repairPrice) return Number(doc.repairPrice);
+  if (doc.repairPrice) return Number(doc.repairPrice);
   return 6000;
 }
 function maintShare(doc, workersCount) {

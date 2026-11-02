@@ -114,7 +114,8 @@ async function flushOfflineQueue() {
     // из-за чего открытая форма ТТН/ТО-ремонта сама сбрасывалась через
     // некоторое время, даже если очередь была пустой.
     const formOpen = (typeof addFormOpen !== "undefined" && addFormOpen)
-      || (typeof maintFormOpen !== "undefined" && maintFormOpen);
+      || (typeof maintFormOpen !== "undefined" && maintFormOpen)
+      || (typeof maintEditId !== "undefined" && maintEditId);
     if (syncedAny && !formOpen && typeof currentTab !== "undefined" && currentTab === "documents") {
       render();
     }

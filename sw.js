@@ -83,7 +83,7 @@ self.addEventListener("notificationclick", (e) => {
   );
 });
 
-const VERSION = "vahta-v45";
+const VERSION = "vahta-v46";
 
 // Свои файлы — без них приложение офлайн не запустится вообще.
 // Если хоть один не скачался, установка ДОЛЖНА провалиться, чтобы
