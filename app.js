@@ -70,7 +70,9 @@ function subscribeCloudSettings() {
       // offline-queue.js — на этот экран изменение настроек никак не влияет
       const formOpen = (typeof addFormOpen !== "undefined" && addFormOpen)
         || (typeof maintFormOpen !== "undefined" && maintFormOpen)
-        || (typeof maintEditId !== "undefined" && maintEditId);
+        || (typeof maintEditId !== "undefined" && maintEditId)
+        || (typeof logFormOpen !== "undefined" && logFormOpen)
+        || (typeof logEditId !== "undefined" && logEditId);
       if (!formOpen) render();
     } else if (currentProfile?.role === "manager") {
       // документа в базе ещё нет — заводим его тем, что уже есть на этом

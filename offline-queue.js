@@ -93,7 +93,9 @@ async function flushOfflineQueue() {
         for (const blob of item.photoBlobs) {
           urls.push(await uploadToCloudinary(blob));
         }
-        const coll = item.kind === "ttn" ? "ttnDocs" : "maintenanceDocs";
+        const coll = item.kind === "ttn" ? "ttnDocs"
+          : item.kind === "logbook" ? "logbookDocs"
+          : "maintenanceDocs";
         await db.collection(coll).add({
           ...item.payload,
           photoUrls: urls,
@@ -115,7 +117,9 @@ async function flushOfflineQueue() {
     // некоторое время, даже если очередь была пустой.
     const formOpen = (typeof addFormOpen !== "undefined" && addFormOpen)
       || (typeof maintFormOpen !== "undefined" && maintFormOpen)
-      || (typeof maintEditId !== "undefined" && maintEditId);
+      || (typeof maintEditId !== "undefined" && maintEditId)
+      || (typeof logFormOpen !== "undefined" && logFormOpen)
+      || (typeof logEditId !== "undefined" && logEditId);
     if (syncedAny && !formOpen && typeof currentTab !== "undefined" && currentTab === "documents") {
       render();
     }

@@ -4,7 +4,7 @@
 
 const MAX_PHOTOS = 3;
 
-let docsMode = "ttn"; // "ttn" | "maintenance"
+let docsMode = "ttn"; // "ttn" | "maintenance" | "logbook"
 
 // ---------- ТТН ----------
 let docsCache = [];
@@ -167,18 +167,32 @@ function renderDocuments() {
   app.innerHTML = "";
   subscribeDocs();
   subscribeMaintenance();
+  // подписываемся сразу, даже если открыт не журнал: иначе счётчик открытых
+  // замечаний на кнопке «Журнал» был бы пустым до первого захода туда
+  if (typeof subscribeLogbook === "function") subscribeLogbook();
   const wrap = el("div", "space-y-3");
 
-  const modeRow = el("div", "flex gap-2");
-  const btnTtn = el("button", `flex-1 py-2.5 rounded-xl text-sm font-semibold ${docsMode === "ttn" ? "bg-diesel text-white" : "bg-white text-slate-500"}`, `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M6 2h9l5 5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20V3.5A1.5 1.5 0 0 1 6 2z"/><path d="M14 2v5h5M8 12h8M8 16h5"/></svg>ТТН`);
-  const btnMaint = el("button", `flex-1 py-2.5 rounded-xl text-sm font-semibold ${docsMode === "maintenance" ? "bg-diesel text-white" : "bg-white text-slate-500"}`, `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L2 19l3 3 7.3-7.3a4 4 0 0 0 5.4-5.4l-2.8 2.8-2-2z"/></svg>ТО / Ремонт`);
+  // три режима в одной вкладке. Иконки оставлены только у первых двух:
+  // с тремя кнопками подписи на узких экранах уже впритык.
+  const modeRow = el("div", "flex gap-1.5");
+  const btnTtn = el("button", `flex-1 py-2.5 rounded-xl text-[13px] font-semibold ${docsMode === "ttn" ? "bg-diesel text-white" : "bg-white text-slate-500"}`, `ТТН`);
+  const btnMaint = el("button", `flex-1 py-2.5 rounded-xl text-[13px] font-semibold ${docsMode === "maintenance" ? "bg-diesel text-white" : "bg-white text-slate-500"}`, `ТО / Ремонт`);
+  const btnLog = el("button", `flex-1 py-2.5 rounded-xl text-[13px] font-semibold relative ${docsMode === "logbook" ? "bg-diesel text-white" : "bg-white text-slate-500"}`, `Журнал`);
+  // счётчик открытых замечаний прямо на кнопке — чтобы они не терялись
+  const openCnt = typeof openDefects === "function" ? openDefects().length : 0;
+  if (openCnt) {
+    btnLog.innerHTML += `<span class="absolute -top-1 -right-1 bg-brick text-white text-[10px] font-num font-bold rounded-full min-w-[17px] h-[17px] px-1 flex items-center justify-center">${openCnt}</span>`;
+  }
   btnTtn.onclick = () => { docsMode = "ttn"; render(); };
   btnMaint.onclick = () => { docsMode = "maintenance"; render(); };
+  btnLog.onclick = () => { docsMode = "logbook"; render(); };
   modeRow.appendChild(btnTtn);
   modeRow.appendChild(btnMaint);
+  modeRow.appendChild(btnLog);
   wrap.appendChild(modeRow);
 
   if (docsMode === "ttn") renderTtnSection(wrap);
+  else if (docsMode === "logbook") renderLogbookSection(wrap);
   else renderMaintenanceSection(wrap);
 
   app.appendChild(wrap);
