@@ -11,6 +11,11 @@ let docsCache = [];
 let docsUnsub = null;
 let addFormOpen = false;
 let selectedFiles = []; // массив File, до MAX_PHOTOS
+// правка уже загруженной ТТН (только руководитель):
+// id записи, новые фото и список уже загруженных фото, которые оставляем
+let ttnEditId = null;
+let ttnEditFiles = [];
+let ttnEditPhotos = [];
 let docsFilterFrom = ""; // фильтр по дате ТТН, ISO "YYYY-MM-DD"
 let docsFilterTo = "";
 let docsShowArchive = false; // false = текущая неделя, true = архив (до вторника)
@@ -21,7 +26,8 @@ function subscribeDocs() {
     .onSnapshot((snap) => {
       docsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       // не сносим форму, если человек как раз сейчас её заполняет
-      if (currentTab === "documents" && docsMode === "ttn" && !addFormOpen) renderDocuments();
+      // не сносим форму, пока человек её заполняет или правит запись
+      if (currentTab === "documents" && docsMode === "ttn" && !addFormOpen && !ttnEditId) renderDocuments();
     }, (err) => { console.error(err); });
 }
 
@@ -202,11 +208,20 @@ function renderDocuments() {
 // РЕЖИМ: ТТН
 // ============================================================
 function renderTtnSection(wrap) {
-  const addBtn = el("button", "w-full py-3 rounded-xl bg-diesel text-white font-semibold shadow-sm flex items-center justify-center gap-2", `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span>Добавить ТТН / путевой лист</span>`);
-  addBtn.onclick = () => { addFormOpen = true; selectedFiles = []; render(); };
-  wrap.appendChild(addBtn);
+  // если правимая запись исчезла (удалили с другого устройства) — выходим из правки
+  const editDoc = ttnEditId ? docsCache.find((d) => d.id === ttnEditId) : null;
+  if (ttnEditId && !editDoc) { ttnEditId = null; ttnEditFiles = []; ttnEditPhotos = []; }
 
-  if (addFormOpen) wrap.appendChild(renderAddForm());
+  if (editDoc) {
+    // пока правим запись, кнопку «добавить» и вторую форму не показываем
+    wrap.appendChild(renderTtnEditForm(editDoc));
+  } else {
+    const addBtn = el("button", "w-full py-3 rounded-xl bg-diesel text-white font-semibold shadow-sm flex items-center justify-center gap-2", `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span>Добавить ТТН / путевой лист</span>`);
+    addBtn.onclick = () => { addFormOpen = true; selectedFiles = []; render(); };
+    wrap.appendChild(addBtn);
+
+    if (addFormOpen) wrap.appendChild(renderAddForm());
+  }
 
   const { current, archived } = splitCurrentArchive(docsCache);
 
@@ -285,20 +300,252 @@ function renderTtnSection(wrap) {
       <div class="text-slate-600 text-xs"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg>${escapeHtml(doc.driverName || "—")}</div>
       <div class="text-slate-600 text-xs"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M12 3v18M7 21h10"/><path d="M5 7h5M5 7l-2.5 5a2.5 2.5 0 0 0 5 0L5 7z"/><path d="M19 7h-5M19 7l2.5 5a2.5 2.5 0 0 1-5 0L19 7z"/></svg>${doc.weight ? doc.weight + " т" : "—"}</div>
       <div class="text-shift text-xs font-semibold font-num"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-0.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5a2.5 2.5 0 0 1 2.5-1.5h.5a2 2 0 0 1 0 4h-1a2 2 0 0 0 0 4h.5a2.5 2.5 0 0 0 2.5-1.5"/></svg>6 000 ₽</div>
-      <div class="text-slate-300 text-[10px] mt-1">добавил(а): ${escapeHtml(doc.uploadedByName || "")}</div>`;
+      <div class="text-slate-300 text-[10px] mt-1">добавил(а): ${escapeHtml(doc.uploadedByName || "")}</div>
+      ${doc.managerEdited ? `<div class="text-route text-[10px]"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-0.5"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>исправил(а): ${escapeHtml(doc.editedByName || "руководитель")}</div>` : ""}`;
     card.appendChild(info);
 
-    const canDelete = currentUser && (doc.uploadedByUid === currentUser.uid || currentProfile?.role === "manager");
-    if (canDelete) {
-      const del = el("button", "text-slate-300 hover:text-rose-500 shrink-0 self-start", "✕");
-      del.onclick = () => {
-        if (confirm("Удалить эту запись?")) db.collection("ttnDocs").doc(doc.id).delete();
-      };
-      card.appendChild(del);
+    const isManager = currentProfile?.role === "manager";
+    const canDelete = currentUser && (doc.uploadedByUid === currentUser.uid || isManager);
+    if (isManager || canDelete) {
+      const btnCol = el("div", "shrink-0 self-start flex flex-col items-center gap-2");
+      // править может только руководитель: ТТН — это и смена водителя (6 000 ₽),
+      // и тоннаж в реестре перевозок, поэтому правка помечается на карточке
+      if (isManager) {
+        const edit = el("button", "text-slate-300 hover:text-diesel", `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>`);
+        edit.title = "Исправить запись";
+        edit.onclick = () => {
+          ttnEditId = doc.id;
+          ttnEditFiles = [];
+          ttnEditPhotos = (doc.photoUrls || (doc.photoUrl ? [doc.photoUrl] : [])).slice();
+          addFormOpen = false;
+          render();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        };
+        btnCol.appendChild(edit);
+      }
+      if (canDelete) {
+        const del = el("button", "text-slate-300 hover:text-rose-500", "✕");
+        del.title = "Удалить запись";
+        del.onclick = () => {
+          if (confirm("Удалить эту запись?")) db.collection("ttnDocs").doc(doc.id).delete();
+        };
+        btnCol.appendChild(del);
+      }
+      card.appendChild(btnCol);
     }
 
     wrap.appendChild(card);
   });
+}
+
+// ---------- правка уже загруженной ТТН (руководитель) ----------
+// Отличия от формы добавления:
+//   • поля заполнены тем, что уже лежит в записи;
+//   • уже загруженные фото можно убрать, новые — добавить, но совсем без
+//     фото сохранить нельзя: фото ТТН и путевого — это сам документ;
+//   • предупреждает, если такой номер ТТН уже есть в другой записи:
+//     дубль номера означает лишнюю смену и лишние 6 000 ₽ в табеле;
+//   • кто добавил запись и когда — не меняется, иначе запись переехала бы
+//     между «Текущими» и «Архивом»; правка отмечается отдельно.
+// Менять можно всё, включая водителя, дату и вес — но это сразу двигает
+// деньги в табеле и тоннаж в реестре перевозок, поэтому в форме про это
+// написано прямым текстом.
+function renderTtnEditForm(doc) {
+  const card = el("div", "bg-white rounded-xl border-2 border-route p-4 space-y-3");
+
+  // водителя и машину, которых уже нет в Настройках, всё равно показываем —
+  // иначе при правке они молча заменились бы на других
+  const driverNames = [...new Set(STATE.drivers.map((d) => d.name).filter(Boolean))];
+  const driverKnown = driverNames.includes(doc.driverName);
+  const trucks = STATE.trucks.slice();
+  if (doc.truck && !trucks.includes(doc.truck)) trucks.push(doc.truck);
+
+  card.innerHTML = `
+    <div class="flex items-center justify-between">
+      <div class="font-bold text-slate-700">Исправить запись — ТТН</div>
+      <div class="text-[10px] text-slate-400 text-right shrink-0 pl-2">добавил(а)<br>${escapeHtml(doc.uploadedByName || "—")}</div>
+    </div>
+    <label class="block text-xs text-slate-500">Номер ТТН
+      <input id="te-ttn" value="${escapeHtml(doc.ttnNumber || "")}" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm" />
+    </label>
+    <div id="te-dup" class="text-[11px] text-brick hidden -mt-1"></div>
+    <label class="block text-xs text-slate-500">Дата ТТН
+      <input id="te-date" type="date" value="${doc.ttnDate || ""}" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm" />
+    </label>
+    <label class="block text-xs text-slate-500">Номер машины
+      <select id="te-truck" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
+        ${trucks.map((t) => `<option value="${escapeHtml(t)}" ${t === doc.truck ? "selected" : ""}>${escapeHtml(t)}</option>`).join("")}
+      </select>
+    </label>
+    <label class="block text-xs text-slate-500">ФИО водителя
+      <select id="te-driver-select" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white"></select>
+      <input id="te-driver-other" placeholder="Впиши ФИО" value="${driverKnown ? "" : escapeHtml(doc.driverName || "")}" class="mt-2 ${driverKnown ? "hidden" : ""} w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm" />
+    </label>
+    <label class="block text-xs text-slate-500">Вес груза, т
+      <input id="te-weight" type="number" min="0" step="0.01" value="${doc.weight != null ? doc.weight : ""}" class="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm" />
+    </label>
+    <div class="text-[11px] text-slate-400">Правка водителя или даты двигает смену (6 000 ₽) в табеле, правка веса — тоннаж в реестре перевозок.</div>
+    <div>
+      <div class="flex items-center justify-between mb-1">
+        <div class="text-xs text-slate-500">Фото (путевой лист + ТТН)</div>
+        <div id="te-photo-count" class="text-xs text-slate-400 font-medium">0 / ${MAX_PHOTOS}</div>
+      </div>
+      <div class="flex gap-2">
+        <button type="button" id="te-btn-camera" class="flex-1 py-2.5 rounded-lg bg-diesel-700 text-white text-sm font-semibold">Камера</button>
+        <button type="button" id="te-btn-gallery" class="flex-1 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-sm font-semibold">Галерея</button>
+      </div>
+      <input id="te-photo-camera" type="file" accept="image/*" capture="environment" class="hidden" />
+      <input id="te-photo-gallery" type="file" accept="image/*" multiple class="hidden" />
+      <div id="te-thumbs" class="grid grid-cols-3 gap-2 mt-2"></div>
+    </div>
+    <div id="te-error" class="text-xs text-rose-600 hidden"></div>
+    <div class="flex gap-2 pt-1">
+      <button id="te-save" class="flex-1 py-2.5 rounded-lg bg-diesel text-white font-semibold text-sm">Сохранить</button>
+      <button id="te-cancel" class="px-4 py-2.5 rounded-lg bg-slate-100 text-slate-500 font-semibold text-sm">Отмена</button>
+    </div>`;
+
+  const driverSelect = card.querySelector("#te-driver-select");
+  const otherInput = card.querySelector("#te-driver-other");
+  driverSelect.innerHTML =
+    `<option value="">Выбери водителя</option>` +
+    driverNames.map((n) => `<option value="${escapeHtml(n)}" ${n === doc.driverName ? "selected" : ""}>${escapeHtml(n)}</option>`).join("") +
+    `<option value="__other__" ${driverKnown ? "" : "selected"}>Другой (вписать ФИО)</option>`;
+  driverSelect.onchange = () => {
+    otherInput.classList.toggle("hidden", driverSelect.value !== "__other__");
+  };
+
+  // ---- предупреждение о дубле номера ----
+  const ttnInput = card.querySelector("#te-ttn");
+  const dupBox = card.querySelector("#te-dup");
+  function checkDup() {
+    const v = ttnInput.value.trim();
+    const clash = v && docsCache.some((d) => d.id !== doc.id && String(d.ttnNumber || "").trim() === v);
+    dupBox.textContent = clash ? `Такой номер уже есть в другой записи — проверь, не получится ли дубль смены.` : "";
+    dupBox.classList.toggle("hidden", !clash);
+  }
+  ttnInput.oninput = checkDup;
+  checkDup();
+
+  // ---- фото: уже загруженные (ttnEditPhotos) + новые (ttnEditFiles) ----
+  const camInput = card.querySelector("#te-photo-camera");
+  const galInput = card.querySelector("#te-photo-gallery");
+  const btnCam = card.querySelector("#te-btn-camera");
+  const btnGal = card.querySelector("#te-btn-gallery");
+  const countLabel = card.querySelector("#te-photo-count");
+  const thumbsWrap = card.querySelector("#te-thumbs");
+
+  function total() { return ttnEditPhotos.length + ttnEditFiles.length; }
+
+  function renderThumbs() {
+    countLabel.textContent = `${total()} / ${MAX_PHOTOS}`;
+    const atLimit = total() >= MAX_PHOTOS;
+    btnCam.disabled = atLimit;
+    btnGal.disabled = atLimit;
+    btnCam.classList.toggle("opacity-40", atLimit);
+    btnGal.classList.toggle("opacity-40", atLimit);
+
+    thumbsWrap.innerHTML = "";
+    ttnEditPhotos.forEach((url, idx) => {
+      const box = el("div", "relative");
+      const img = el("img", "w-full h-20 object-cover rounded-lg bg-slate-50");
+      img.src = url;
+      box.appendChild(img);
+      const rm = el("button", "absolute -top-1.5 -right-1.5 bg-diesel text-white rounded-full w-5 h-5 text-xs flex items-center justify-center", "✕");
+      rm.type = "button";
+      rm.onclick = () => { ttnEditPhotos.splice(idx, 1); renderThumbs(); };
+      box.appendChild(rm);
+      thumbsWrap.appendChild(box);
+    });
+    ttnEditFiles.forEach((file, idx) => {
+      const box = el("div", "relative");
+      const img = el("img", "w-full h-20 object-cover rounded-lg bg-slate-50");
+      const reader = new FileReader();
+      reader.onload = (ev) => { img.src = ev.target.result; };
+      reader.readAsDataURL(file);
+      box.appendChild(img);
+      box.appendChild(el("div", "absolute bottom-0.5 left-0.5 bg-shift text-white text-[9px] px-1 rounded", "новое"));
+      const rm = el("button", "absolute -top-1.5 -right-1.5 bg-diesel text-white rounded-full w-5 h-5 text-xs flex items-center justify-center", "✕");
+      rm.type = "button";
+      rm.onclick = () => { ttnEditFiles.splice(idx, 1); renderThumbs(); };
+      box.appendChild(rm);
+      thumbsWrap.appendChild(box);
+    });
+  }
+  function addFiles(fileList) {
+    for (const f of fileList) {
+      if (total() >= MAX_PHOTOS) break;
+      ttnEditFiles.push(f);
+    }
+    renderThumbs();
+  }
+  btnCam.onclick = () => { if (total() < MAX_PHOTOS) camInput.click(); };
+  btnGal.onclick = () => { if (total() < MAX_PHOTOS) galInput.click(); };
+  camInput.onchange = (e) => { addFiles(e.target.files); camInput.value = ""; };
+  galInput.onchange = (e) => { addFiles(e.target.files); galInput.value = ""; };
+  renderThumbs();
+
+  function closeEdit() {
+    ttnEditId = null;
+    ttnEditFiles = [];
+    ttnEditPhotos = [];
+    render();
+  }
+  card.querySelector("#te-cancel").onclick = closeEdit;
+
+  card.querySelector("#te-save").onclick = async () => {
+    const errBox = card.querySelector("#te-error");
+    const saveBtn = card.querySelector("#te-save");
+    const fail = (msg) => {
+      errBox.textContent = msg;
+      errBox.classList.remove("hidden");
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Сохранить";
+    };
+
+    const ttnNumber = ttnInput.value.trim();
+    const ttnDate = card.querySelector("#te-date").value;
+    const truck = card.querySelector("#te-truck").value;
+    const driverName = driverSelect.value === "__other__"
+      ? otherInput.value.trim()
+      : driverSelect.value;
+    const weightRaw = card.querySelector("#te-weight").value;
+
+    if (!ttnNumber || !ttnDate || !driverName) return fail("Заполни номер ТТН, дату и водителя.");
+    if (!total()) return fail("Нужно хотя бы одно фото — это сам документ. Добавь фото или нажми «Отмена».");
+    if (weightRaw !== "" && !(Number(weightRaw) > 0)) return fail("Вес выглядит неправильно.");
+    // правка идёт прямо в базу: складывать её в офлайн-очередь нельзя —
+    // очередь умеет только добавлять новые записи, и правка потерялась бы
+    if (!navigator.onLine) return fail("Для правки нужен интернет — офлайн сохранить изменения не получится.");
+
+    errBox.classList.add("hidden");
+    saveBtn.disabled = true;
+
+    try {
+      const urls = ttnEditPhotos.slice();
+      for (let i = 0; i < ttnEditFiles.length; i++) {
+        saveBtn.textContent = `Загружаю фото ${i + 1}/${ttnEditFiles.length}…`;
+        urls.push(await uploadToCloudinary(await resizeImage(ttnEditFiles[i])));
+      }
+      saveBtn.textContent = "Сохраняю…";
+      // uploadedAt / uploadedByUid / uploadedByName НЕ трогаем:
+      // от uploadedAt зависит, лежит запись в «Текущих» или в «Архиве»
+      await db.collection("ttnDocs").doc(doc.id).update({
+        ttnNumber, ttnDate, truck, driverName,
+        weight: weightRaw !== "" ? Number(weightRaw) : null,
+        photoUrls: urls,
+        photoUrl: null, // старое одиночное поле больше не нужно
+        managerEdited: true,
+        editedByUid: currentUser.uid,
+        editedByName: currentProfile.name,
+        editedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      closeEdit();
+    } catch (e) {
+      fail("Не получилось сохранить: " + e.message);
+    }
+  };
+
+  return card;
 }
 
 function renderAddForm() {

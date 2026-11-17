@@ -72,7 +72,8 @@ function subscribeCloudSettings() {
         || (typeof maintFormOpen !== "undefined" && maintFormOpen)
         || (typeof maintEditId !== "undefined" && maintEditId)
         || (typeof logFormOpen !== "undefined" && logFormOpen)
-        || (typeof logEditId !== "undefined" && logEditId);
+        || (typeof logEditId !== "undefined" && logEditId)
+        || (typeof ttnEditId !== "undefined" && ttnEditId);
       if (!formOpen) render();
     } else if (currentProfile?.role === "manager") {
       // документа в базе ещё нет — заводим его тем, что уже есть на этом
