@@ -409,6 +409,8 @@ function renderExpenseForm(editDoc) {
       <input id="ex-file-i" type="file" accept="application/pdf,image/*" multiple class="hidden" />
       <input id="ex-cam-i" type="file" accept="image/*" capture="environment" class="hidden" />
       <div id="ex-files" class="space-y-1.5 mt-2"></div>
+      <div id="ex-parse-hint" class="hidden mt-2"></div>
+      <div class="text-[11px] text-slate-400 mt-1.5">Если счёт — PDF из бухгалтерии, приложение само прочитает сумму, номер и дату. Со сканом и фотографией так не выйдет: там текста нет.</div>
     </div>
     <div id="ex-err" class="text-xs text-rose-600 hidden"></div>
     <div class="flex gap-2 pt-1">
@@ -451,8 +453,68 @@ function renderExpenseForm(editDoc) {
       listEl.appendChild(r);
     });
   }
+  // ---------- подстановка из PDF ----------
+  // Читаем текстовый слой счёта и заполняем ПУСТЫЕ поля. Заполненные
+  // руками не трогаем: человек главнее разбора. Что подставили —
+  // показываем списком, чтобы было понятно, что именно проверять.
+  const hintBox = card.querySelector("#ex-parse-hint");
+  function showHint(cls, html) {
+    hintBox.className = "text-[11px] rounded-lg px-2.5 py-2 " + cls;
+    hintBox.innerHTML = html;
+    hintBox.classList.remove("hidden");
+  }
+  async function tryParseInvoice(file) {
+    if (typeof parseInvoiceFile !== "function") return;
+    showHint("bg-slate-50 text-slate-500 border border-slate-200", "Читаю счёт…");
+    const res = await parseInvoiceFile(file);
+    if (!res.ok) {
+      if (res.reason === "no-text") {
+        showHint("bg-route/10 text-slate-600 border border-route/30",
+          "В этом файле нет текста — похоже, скан или фотография. Сумму и номер впиши руками.");
+      } else if (res.reason === "error") {
+        showHint("bg-route/10 text-slate-600 border border-route/30",
+          "Не получилось разобрать счёт — заполни поля руками." + (res.message ? ` (${escapeHtml(res.message)})` : ""));
+      } else {
+        hintBox.classList.add("hidden");
+      }
+      return;
+    }
+    const filled = [];
+    const setIfEmpty = (sel, val, label) => {
+      if (val == null || val === "") return;
+      const inp = card.querySelector(sel);
+      if (!inp || String(inp.value).trim() !== "") return;
+      inp.value = val;
+      inp.classList.add("bg-route/10", "border-route");
+      filled.push(label);
+    };
+    setIfEmpty("#ex-amount", res.amount, "сумму");
+    setIfEmpty("#ex-num", res.invoiceNumber, "номер счёта");
+    setIfEmpty("#ex-supplier", res.supplier, "поставщика");
+    if (res.date) {
+      const d = card.querySelector("#ex-date");
+      // дату подставляем, даже если там стоит сегодняшняя по умолчанию:
+      // дата счёта почти всегда не сегодняшняя
+      if (!editDoc && d.value !== res.date) {
+        d.value = res.date;
+        d.classList.add("bg-route/10", "border-route");
+        filled.push("дату");
+      }
+    }
+    if (res.vat !== null) card.querySelector("#ex-vat").checked = res.vat;
+
+    if (filled.length) {
+      showHint("bg-shift/10 text-slate-700 border border-shift/30",
+        `<b>Подставил из счёта:</b> ${filled.join(", ")}. Проверь глазами — подсвеченные поля можно поправить.`);
+    } else {
+      showHint("bg-route/10 text-slate-600 border border-route/30",
+        "Счёт прочитал, но сумму и номер в нём не нашёл — впиши руками.");
+    }
+  }
+
   function addFiles(fl) {
     const errBox = card.querySelector("#ex-err");
+    let firstPdf = null;
     for (const f of fl) {
       if (total() >= EXP_MAX_FILES) break;
       if (f.size > EXP_MAX_FILE_MB * 1024 * 1024) {
@@ -461,8 +523,10 @@ function renderExpenseForm(editDoc) {
         continue;
       }
       expSelectedFiles.push(f);
+      if (!firstPdf && (/pdf/i.test(f.type || "") || /\.pdf$/i.test(f.name || ""))) firstPdf = f;
     }
     paintFiles();
+    if (firstPdf) tryParseInvoice(firstPdf);
   }
   pickB.onclick = () => { if (total() < EXP_MAX_FILES) fileI.click(); };
   camB.onclick = () => { if (total() < EXP_MAX_FILES) camI.click(); };
