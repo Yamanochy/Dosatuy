@@ -24,6 +24,10 @@ function withRepairTypesFallback(s) {
   }
   // у настроек, сохранённых до появления гос. номеров, этого поля ещё нет
   if (!s.truckPlates || typeof s.truckPlates !== "object") s.truckPlates = {};
+  // то же для статей расходов — они появились позже
+  if (!Array.isArray(s.expenseCategories) || !s.expenseCategories.length) {
+    s.expenseCategories = DEFAULT_SETTINGS.expenseCategories.slice();
+  }
   return s;
 }
 
@@ -63,6 +67,7 @@ function subscribeCloudSettings() {
         trucks: data.trucks,
         truckPlates: data.truckPlates,
         repairTypes: data.repairTypes,
+        expenseCategories: data.expenseCategories,
       };
       STATE = withRepairTypesFallback(STATE);
       saveSettings(STATE); // обновляем локальный кэш
@@ -73,7 +78,9 @@ function subscribeCloudSettings() {
         || (typeof maintEditId !== "undefined" && maintEditId)
         || (typeof logFormOpen !== "undefined" && logFormOpen)
         || (typeof logEditId !== "undefined" && logEditId)
-        || (typeof ttnEditId !== "undefined" && ttnEditId);
+        || (typeof ttnEditId !== "undefined" && ttnEditId)
+        || (typeof expFormOpen !== "undefined" && expFormOpen)
+        || (typeof expEditId !== "undefined" && expEditId);
       if (!formOpen) render();
     } else if (currentProfile?.role === "manager") {
       // документа в базе ещё нет — заводим его тем, что уже есть на этом
@@ -193,6 +200,14 @@ const app = document.getElementById("app");
 let currentTab = "dashboard";
 let tempTrucks = null; // черновик списка машин при редактировании в Настройках
 let tempRepairTypes = null; // черновик видов ремонта при редактировании в Настройках
+let tempExpenseCats = null; // черновик статей расходов там же
+
+// статьи расходов: из настроек, а если их там ещё нет — заводские
+function expenseCategories() {
+  const list = (STATE && Array.isArray(STATE.expenseCategories)) ? STATE.expenseCategories : [];
+  const clean = list.map((c) => String(c || "").trim()).filter(Boolean);
+  return clean.length ? clean : DEFAULT_SETTINGS.expenseCategories.slice();
+}
 let tempPlates = null; // черновик гос. номеров машин
 
 // строгие line-иконки нижней навигации (без эмодзи)
@@ -541,6 +556,45 @@ function renderSettings() {
   repairCard.appendChild(addRepairBtn);
   wrap.appendChild(repairCard);
 
+  // ---------- статьи расходов ----------
+  // Только названия: сумму по каждому счёту вписывают вручную во вкладке
+  // «Расходы». Удалять статью, по которой уже есть счета, не мешаем —
+  // в самих счетах название сохранено, и отчёты за прошлые месяцы не поедут.
+  if (tempExpenseCats === null) tempExpenseCats = expenseCategories().slice();
+  function captureExpenseInputs() {
+    const rows = [...document.querySelectorAll("[data-expcat]")];
+    if (!rows.length) return tempExpenseCats.slice();
+    return rows.map((inp) => inp.value);
+  }
+  const expCard = el("div", "bg-white rounded-xl p-4 shadow-sm space-y-2");
+  expCard.appendChild(el("div", "font-bold text-slate-700 mb-1", "Статьи расходов"));
+  expCard.appendChild(el("div", "text-xs text-slate-400 -mt-1 mb-1",
+    "По ним раскладываются счета во вкладке «Расходы»."));
+  tempExpenseCats.forEach((name, idx) => {
+    const row = el("div", "flex gap-2 items-center");
+    const inp = el("input", "flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-sm");
+    inp.dataset.expcat = String(idx);
+    inp.value = name;
+    inp.placeholder = "название статьи";
+    row.appendChild(inp);
+    const del = el("button", "text-slate-300 hover:text-brick shrink-0 px-1 text-lg", "✕");
+    del.onclick = () => {
+      tempExpenseCats = captureExpenseInputs();
+      tempExpenseCats.splice(idx, 1);
+      render();
+    };
+    row.appendChild(del);
+    expCard.appendChild(row);
+  });
+  const addExpBtn = el("button", "text-sm text-slate-600 font-semibold mt-1", `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M12 5v14M5 12h14"/></svg>Добавить статью расходов`);
+  addExpBtn.onclick = () => {
+    tempExpenseCats = captureExpenseInputs();
+    tempExpenseCats.push("");
+    render();
+  };
+  expCard.appendChild(addExpBtn);
+  wrap.appendChild(expCard);
+
   const btnRow = el("div", "flex gap-3");
   const saveBtn = el("button", "flex-1 py-3 rounded-xl bg-diesel text-white font-semibold shadow-sm", "Сохранить");
   const resetBtn = el("button", "px-4 py-3 rounded-xl bg-white text-slate-500 font-semibold shadow-sm", "Сбросить");
@@ -584,6 +638,13 @@ function renderSettings() {
       .filter(r => r.name && r.price > 0);
     STATE.repairTypes = cleanedRepairTypes;
     tempRepairTypes = cleanedRepairTypes.map(r => ({ ...r }));
+    const cleanedExpenseCats = [...new Set(
+      captureExpenseInputs().map((c) => String(c || "").trim()).filter(Boolean)
+    )];
+    STATE.expenseCategories = cleanedExpenseCats.length
+      ? cleanedExpenseCats
+      : DEFAULT_SETTINGS.expenseCategories.slice();
+    tempExpenseCats = STATE.expenseCategories.slice();
     saveSettings(STATE); // локальный кэш — мгновенно
     saveBtn.disabled = true;
     saveBtn.textContent = "Сохраняю…";
@@ -605,6 +666,7 @@ function renderSettings() {
       tempTrucks = null;
       tempPlates = null;
       tempRepairTypes = null;
+      tempExpenseCats = null;
       render();
       saveCloudSettings(STATE).catch((e) => alert("Не удалось сбросить в общей базе: " + e.message));
     }

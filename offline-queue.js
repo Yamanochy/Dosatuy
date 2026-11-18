@@ -120,7 +120,9 @@ async function flushOfflineQueue() {
       || (typeof maintEditId !== "undefined" && maintEditId)
       || (typeof logFormOpen !== "undefined" && logFormOpen)
       || (typeof logEditId !== "undefined" && logEditId)
-      || (typeof ttnEditId !== "undefined" && ttnEditId);
+      || (typeof ttnEditId !== "undefined" && ttnEditId)
+      || (typeof expFormOpen !== "undefined" && expFormOpen)
+      || (typeof expEditId !== "undefined" && expEditId);
     if (syncedAny && !formOpen && typeof currentTab !== "undefined" && currentTab === "documents") {
       render();
     }

@@ -19,10 +19,36 @@ const ICON_DUMPTRUCK = '<svg width="22" height="22" viewBox="0 0 24 24" fill="no
 const ICON_SCALE = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M7 21h10"/><path d="M5 7h5M5 7l-2.5 5a2.5 2.5 0 0 0 5 0L5 7z"/><path d="M19 7h-5M19 7l2.5 5a2.5 2.5 0 0 1-5 0L19 7z"/></svg>';
 const ICON_TROPHY = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline -mt-0.5 mr-1"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M7 5H4a3 3 0 0 0 3 5M17 5h3a3 3 0 0 1-3 5"/></svg>';
 
+// вкладка «Статистика» у руководителя делится на два раздела:
+// перевозки (как было) и расходы по счетам. Водитель видит только
+// перевозки — переключателя у него нет, и сами расходы ему не отдаёт
+// ни приложение, ни правила Firestore.
+let statsMode = "trips"; // "trips" | "expenses"
+
 function renderStatistics() {
   app.innerHTML = "";
   destroyStatsCharts();
   const wrap = el("div", "space-y-3");
+
+  if (currentProfile?.role === "manager") {
+    const seg = el("div", "flex gap-2");
+    [["trips", "Перевозки"], ["expenses", "Расходы"]].forEach(([key, label]) => {
+      const b = el("button",
+        `flex-1 py-2.5 rounded-xl text-sm font-semibold ${statsMode === key ? "bg-diesel text-white" : "bg-white text-slate-500"}`,
+        label);
+      b.onclick = () => { statsMode = key; render(); };
+      seg.appendChild(b);
+    });
+    wrap.appendChild(seg);
+
+    if (statsMode === "expenses") {
+      renderExpensesSection(wrap);
+      app.appendChild(wrap);
+      return;
+    }
+  } else if (statsMode === "expenses") {
+    statsMode = "trips"; // на случай смены пользователя на том же телефоне
+  }
 
   const today = toDateOnly(new Date());
   const year = today.getFullYear(), month = today.getMonth();

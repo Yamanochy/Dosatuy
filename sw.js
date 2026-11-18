@@ -83,7 +83,7 @@ self.addEventListener("notificationclick", (e) => {
   );
 });
 
-const VERSION = "vahta-v48";
+const VERSION = "vahta-v49";
 
 // Свои файлы — без них приложение офлайн не запустится вообще.
 // Если хоть один не скачался, установка ДОЛЖНА провалиться, чтобы
@@ -97,6 +97,7 @@ const CORE_ASSETS = [
   "./app.js",
   "./docs.js",
   "./logbook.js",
+  "./expenses.js",
   "./xl-sheet.js",
   "./timesheet.js",
   "./stats.js",
